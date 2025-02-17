@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+
+{% block title %}Home - RepoAnalyzer{% endblock %}
+
+{% block content %}
+<div class="hero-section text-center py-5">
+    <h1 class="display-4 mb-4">Bienvenido a RepoAnalyzer</h1>
+    <p class="lead mb-4">Analiza repositorios de GitHub con el poder de la IA</p>
+</div>
+
+<div class="features-section py-5">
+    <div class="row">
+        <div class="col-md-4">
+            <div class="feature-card">
+                <i class="fas fa-chart-line feature-icon"></i>
+                <h3>Análisis Detallado</h3>
+                <p>Obtén métricas detalladas sobre commits, contribuidores y lenguajes utilizados.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card">
+                <i class="fas fa-code feature-icon"></i>
+                <h3>Tecnologías</h3>
+                <p>Descubre las tecnologías y librerías más utilizadas en el proyecto.</p>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="feature-card">
+                <i class="fas fa-users feature-icon"></i>
+                <h3>Colaboración</h3>
+                <p>Analiza los patrones de colaboración y contribución del equipo.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="cta-section text-center py-5">
+    <h2>¿Listo para comenzar?</h2>
+    <p class="mb-4">Analiza tu primer repositorio ahora</p>
+    <a href="{% url 'analysis' %}" class="btn btn-primary btn-lg">Comenzar Análisis</a>
+</div>
+{% endblock %} 
