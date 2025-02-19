@@ -1,0 +1,66 @@
+{% extends 'base.html' %}
+
+{% block title %}Análisis Rápido - RepoAnalyzer{% endblock %}
+
+{% block content %}
+<div class="quick-analysis-container">
+    <h1 class="text-center mb-4">Análisis Rápido de Repositorio</h1>
+    
+    <div class="card p-4 shadow-sm">
+        <form method="POST" action="{% url 'quick_analysis' %}" class="repo-form">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="repo_url" class="form-label">URL del Repositorio</label>
+                <div class="input-group">
+                    <input type="url" 
+                           class="form-control" 
+                           id="repo_url" 
+                           name="repo_url" 
+                           placeholder="https://github.com/usuario/repositorio"
+                           required>
+                    <button type="submit" class="btn btn-primary">Analizar</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    {% if graphs %}
+    <div class="analysis-results mt-4">
+        <div class="row">
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Commits Totales</h3>
+                        {{ graphs.commits_timeline|safe }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Distribución por Desarrollador</h3>
+                        {{ graphs.developer_distribution|safe }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Lenguajes Utilizados</h3>
+                        {{ graphs.languages|safe }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Librerías Detectadas</h3>
+                        {{ graphs.libraries|safe }}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %} 

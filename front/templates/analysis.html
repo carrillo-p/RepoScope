@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+
+{% block title %}Análisis - RepoAnalyzer{% endblock %}
+
+{% block content %}
+<div class="analysis-section">
+    <h2 class="mb-4">Análisis de Repositorio</h2>
+    
+    <!-- Formulario de entrada -->
+    <div class="input-section mb-5">
+        <form method="POST" enctype="multipart/form-data" class="card p-4">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="repo_url" class="form-label">URL del Repositorio</label>
+                <input type="url" class="form-control" id="repo_url" name="repo_url" 
+                       placeholder="https://github.com/usuario/repositorio" required>
+            </div>
+            <div class="mb-3">
+                <label for="briefing" class="form-label">Archivo Briefing (PDF)</label>
+                <input type="file" class="form-control" id="briefing" name="briefing" 
+                       accept=".pdf" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Analizar</button>
+        </form>
+    </div>
+
+    <!-- Sección de resultados -->
+    <div class="results-section" id="results">
+        <!-- Commits totales -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Commits Totales</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="commitsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Distribución de commits por desarrollador -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Distribución de Commits por Desarrollador</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="contributorsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Lenguajes utilizados -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Lenguajes y Librerías</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="languagesChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 
