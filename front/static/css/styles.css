@@ -301,7 +301,8 @@ body {
 /* Analysis Page */
 .analysis-section {
     max-width: 1200px;
-    margin: 0 auto;
+    margin: 80px auto 0;
+    padding: 40px 20px;
 }
 
 .input-section .card {
@@ -435,14 +436,6 @@ body {
     padding: 40px 20px;
 }
 
-.quick-analysis-title {
-    text-align: center;
-    color: var(--dark-gray);
-    margin-bottom: 2rem;
-    font-size: 2rem;
-    font-weight: 600;
-}
-
 .repo-form {
     max-width: 600px;
     margin: 0 auto;
@@ -452,6 +445,15 @@ body {
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.repo-form .quick-analysis-title {
+    margin: 2rem 0;
+    text-align: center;
+    color: var(--dark-gray);
+    font-size: 2rem;
+    font-weight: 600;
+    padding-top: 1rem;
 }
 
 .repo-form .form-group {
@@ -473,14 +475,19 @@ body {
 
 /* Responsive adjustments */
 @media (max-width: 768px) {
+    .analysis-section {
+        margin-top: 60px;
+        padding: 20px;
+    }
+    
     .quick-analysis-container {
         margin-top: 60px;
         padding: 20px;
     }
     
     .quick-analysis-title {
-        font-size: 1.75rem;
-        margin-bottom: 1.5rem;
+        margin: 1.5rem 0;
+        padding-top: 0.5rem;
     }
     
     .repo-form {
@@ -575,4 +582,13 @@ body {
         width: 200px;
         margin: 0;
     }
+}
+
+.repo-form .text-center {
+    margin-top: 2rem;
+}
+
+.repo-form .btn-primary {
+    min-width: 200px;
+    margin: 0 auto;
 } 

@@ -1,22 +1,22 @@
 {% extends 'base.html' %}
 
-{% block title %}Análisis Rápido de Repositorio{% endblock %}
+{% block title %}Análisis Rápido - RepoScope{% endblock %}
 
 {% block content %}
-<div class="quick-analysis-container">
-    <h1 class="quick-analysis-title">Análisis Rápido de Repositorio</h1>
-    
-    {% if messages %}
-    <div class="messages mb-4">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags }}">
-            {{ message }}
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-    
+<div class="analysis-section">
     <div class="repo-form">
+        <h1 class="quick-analysis-title mb-4">Análisis Rápido de Repositorio</h1>
+        
+        {% if messages %}
+        <div class="messages mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
         <form method="POST" action="{% url 'quick_analysis' %}">
             {% csrf_token %}
             <div class="form-group">
@@ -31,7 +31,9 @@
                 <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
             
-            <button type="submit" class="btn btn-primary w-100">Analizar</button>
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary">Analizar</button>
+            </div>
         </form>
     </div>
 
