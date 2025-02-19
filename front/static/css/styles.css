@@ -1,28 +1,79 @@
 :root {
-    --primary-orange: #FF6B35;
+    --primary-red: #D01F3C;
+    --secondary-red: #E62E4D;
+    --primary-orange: #E67A52;
     --secondary-orange: #FF8B60;
     --white: #FFFFFF;
     --light-gray: #F8F9FA;
-    --dark-gray: #343A40;
+    --dark-gray: #2A2A2A;
+    --focus-outline: #4A90E2;
+}
+
+/* Estilos globales de accesibilidad */
+* {
+    outline-offset: 2px;
+}
+
+*:focus {
+    outline: 3px solid var(--focus-outline);
+    outline-offset: 2px;
+}
+
+/* Mejoras de texto */
+body {
+    font-size: 16px;
+    line-height: 1.5;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Skip to main content link */
+.skip-to-main-content {
+    position: absolute;
+    left: -9999px;
+    z-index: 999;
+    padding: 1em;
+    background-color: var(--white);
+    color: var(--dark-gray);
+    text-decoration: none;
+}
+
+.skip-to-main-content:focus {
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+/* Mejoras en los elementos interactivos */
+.btn-primary {
+    font-size: 1.1rem;
+    padding: 0.75rem 1.5rem;
+    min-height: 44px;
+    min-width: 44px;
+}
+
+.nav-link {
+    padding: 0.75rem 1rem;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
 }
 
 /* Navbar */
 .navbar {
-    background-color: var(--white);
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background: linear-gradient(45deg, var(--primary-red), var(--primary-orange));
 }
 
 .navbar-brand {
-    color: var(--primary-orange);
+    color: var(--white);
     font-weight: bold;
 }
 
 .nav-link {
-    color: var(--dark-gray);
+    color: var(--white) !important;
 }
 
 .nav-link:hover {
-    color: var(--primary-orange);
+    color: var(--light-gray) !important;
+    opacity: 0.9;
 }
 
 /* Hero Section */
@@ -37,19 +88,24 @@
 
 /* Feature Cards */
 .feature-card {
-    background: #FF6B35 !important;
+    background: linear-gradient(45deg, var(--primary-red), var(--primary-orange)) !important;
     padding: 2rem;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     text-align: center;
     height: 100%;
     transition: transform 0.3s ease;
+    border: 2px solid transparent;
 }
 
 .feature-card:hover {
     transform: translateY(-5px);
-    background: #FF8B60 !important;
+    background: linear-gradient(45deg, var(--secondary-red), var(--secondary-orange)) !important;
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.feature-card:focus-within {
+    outline: 3px solid var(--focus-outline);
 }
 
 .feature-icon {
@@ -67,22 +123,21 @@
 }
 
 .feature-card p {
-    color: #FFFFFF !important;
-    opacity: 1;
-    font-size: 1.1rem;
-    line-height: 1.5;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    color: var(--white) !important;
+    font-size: 1.2rem;
+    line-height: 1.6;
+    text-shadow: none;
 }
 
 /* Buttons */
 .btn-primary {
-    background-color: var(--primary-orange);
-    border-color: var(--primary-orange);
+    background: linear-gradient(45deg, var(--primary-red), var(--primary-orange));
+    border: none;
 }
 
 .btn-primary:hover {
-    background-color: var(--secondary-orange);
-    border-color: var(--secondary-orange);
+    background: linear-gradient(45deg, var(--secondary-red), var(--secondary-orange));
+    border: none;
 }
 
 /* Analysis Page */
@@ -103,14 +158,15 @@
 }
 
 .card-header {
-    background-color: var(--white);
-    border-bottom: 2px solid var(--primary-orange);
+    background: linear-gradient(45deg, var(--primary-red), var(--primary-orange));
+    color: var(--white);
+    border-bottom: none;
 }
 
 /* Footer */
 .footer {
-    background-color: var(--light-gray);
-    color: var(--dark-gray);
+    background: linear-gradient(45deg, var(--primary-red), var(--primary-orange));
+    color: var(--white);
 }
 
 /* Responsive adjustments */
@@ -118,4 +174,63 @@
     .feature-card {
         margin-bottom: 1rem;
     }
+}
+
+/* Banner Section */
+.banner-gif {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    animation-play-state: running !important;
+    -webkit-animation-play-state: running !important;
+}
+
+/* CTA Section */
+.cta-section h2 {
+    color: var(--primary-red);
+}
+
+.cta-section p {
+    color: var(--dark-gray);
+}
+
+/* Animaciones reducidas para usuarios que lo prefieren */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation: none !important;
+        transition: none !important;
+    }
+    
+    .feature-card:hover {
+        transform: none;
+    }
+}
+
+.quick-analysis-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.repo-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.analysis-results .card {
+    height: 100%;
+    transition: transform 0.2s;
+}
+
+.analysis-results .card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+.analysis-results .card-title {
+    font-size: 1.2rem;
+    margin-bottom: 1rem;
+    color: #333;
 } 

@@ -10,6 +10,7 @@ PyGithub>=2.1.1
 # Para gráficos y análisis de datos
 pandas>=2.0.0
 numpy>=1.24.0
+plotly==5.18.0
 
 # Para manejo de archivos y peticiones HTTP
 requests>=2.31.0
