@@ -55,6 +55,31 @@
                 <canvas id="languagesChart"></canvas>
             </div>
         </div>
+
+        <!-- Compliance Report Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Informe de Cumplimiento</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    {% for key, value in compliance_results.items %}
+                        <li class="list-group-item">
+                            <strong>{{ key }}:</strong> {{ value }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Download PDF Button -->
+        {% if pdf_path %}
+        <div class="text-center mt-4">
+            <a href="/{{ pdf_path }}" class="btn btn-primary" download>
+                <i class="fas fa-download"></i> Descargar Informe en PDF
+            </a>
+        </div>
+    {% endif %}
     </div>
 </div>
 {% endblock %} 
