@@ -1,26 +1,38 @@
 {% extends 'base.html' %}
 
-{% block title %}Análisis - RepoAnalyzer{% endblock %}
+{% block title %}Análisis Detallado - RepoScope{% endblock %}
 
 {% block content %}
 <div class="analysis-section">
-    <h2 class="mb-4">Análisis de Repositorio</h2>
-    
-    <!-- Formulario de entrada -->
-    <div class="input-section mb-5">
-        <form method="POST" enctype="multipart/form-data" class="card p-4">
+    <div class="repo-form">
+        <h1 class="quick-analysis-title mb-4">Análisis Detallado de Repositorio</h1>
+        
+        <form method="POST" action="{% url 'analysis' %}" enctype="multipart/form-data">
             {% csrf_token %}
-            <div class="mb-3">
-                <label for="repo_url" class="form-label">URL del Repositorio</label>
-                <input type="url" class="form-control" id="repo_url" name="repo_url" 
-                       placeholder="https://github.com/usuario/repositorio" required>
+            <div class="form-group">
+                <label for="repo_url">URL del Repositorio</label>
+                <input type="url" 
+                       class="form-control" 
+                       id="repo_url" 
+                       name="repo_url"
+                       placeholder="https://github.com/usuario/repositorio"
+                       required>
+                <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
-            <div class="mb-3">
-                <label for="briefing" class="form-label">Archivo Briefing (PDF)</label>
-                <input type="file" class="form-control" id="briefing" name="briefing" 
-                       accept=".pdf" required>
+            
+            <div class="form-group">
+                <label for="briefing">Archivo Briefing (PDF)</label>
+                <input type="file" 
+                       class="form-control" 
+                       id="briefing" 
+                       name="briefing"
+                       accept=".pdf">
+                <small class="form-text">Opcional: Sube un archivo PDF con requisitos específicos</small>
             </div>
-            <button type="submit" class="btn btn-primary">Analizar</button>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary">Analizar</button>
+            </div>
         </form>
     </div>
 

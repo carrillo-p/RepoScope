@@ -4,7 +4,7 @@
     {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="RepoAnalyzer - Analiza repositorios de GitHub con el poder de la IA">
+    <meta name="description" content="RepoScope - Analiza repositorios de GitHub con el poder de la IA">
     <title>{% block title %}Repo Analyzer{% endblock %}</title>
     
     <!-- CSS -->
@@ -19,11 +19,16 @@
     </a>
 
     <!-- Navbar -->
-    <nav class="navbar navbar-expand-lg" role="navigation" aria-label="Navegación principal">
+    <nav class="navbar navbar-expand-lg {% if request.resolver_match.url_name in 'analysis,quick_analysis' %}navbar-solid{% endif %}" role="navigation" aria-label="Navegación principal">
         <div class="container">
-            <a class="navbar-brand" href="{% url 'home' %}" aria-label="Inicio">
-                <i class="fas fa-code-branch" aria-hidden="true"></i>
-                <span>RepoAnalyzer</span>
+            <a class="navbar-brand d-flex align-items-center" href="{% url 'home' %}" aria-label="Inicio">
+                <img src="{% static 'images/gitget.png' %}" 
+                     alt="" 
+                     class="navbar-logo me-2"
+                     width="40" 
+                     height="40"
+                     aria-hidden="true">
+                <span>RepoScope</span>
             </a>
             <button class="navbar-toggler" type="button" 
                     data-bs-toggle="collapse" 
@@ -58,7 +63,7 @@
     <!-- Footer -->
     <footer class="footer mt-5 py-3" role="contentinfo">
         <div class="container text-center">
-            <span>© 2024 RepoAnalyzer. Todos los derechos reservados.</span>
+            <span>© 2025 RepoScope. Todos los derechos reservados.</span>
         </div>
     </footer>
 

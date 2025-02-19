@@ -1,25 +1,38 @@
 {% extends 'base.html' %}
 
-{% block title %}Análisis Rápido - RepoAnalyzer{% endblock %}
+{% block title %}Análisis Rápido - RepoScope{% endblock %}
 
 {% block content %}
-<div class="quick-analysis-container">
-    <h1 class="text-center mb-4">Análisis Rápido de Repositorio</h1>
-    
-    <div class="card p-4 shadow-sm">
-        <form method="POST" action="{% url 'quick_analysis' %}" class="repo-form">
+<div class="analysis-section">
+    <div class="repo-form">
+        <h1 class="quick-analysis-title mb-4">Análisis Rápido de Repositorio</h1>
+        
+        {% if messages %}
+        <div class="messages mb-4">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        
+        <form method="POST" action="{% url 'quick_analysis' %}">
             {% csrf_token %}
-            <div class="mb-3">
-                <label for="repo_url" class="form-label">URL del Repositorio</label>
-                <div class="input-group">
-                    <input type="url" 
-                           class="form-control" 
-                           id="repo_url" 
-                           name="repo_url" 
-                           placeholder="https://github.com/usuario/repositorio"
-                           required>
-                    <button type="submit" class="btn btn-primary">Analizar</button>
-                </div>
+            <div class="form-group">
+                <label for="repo_url">URL del Repositorio</label>
+                <input type="url" 
+                       class="form-control" 
+                       id="repo_url" 
+                       name="repo_url"
+                       placeholder="https://github.com/usuario/repositorio"
+                       required
+                       value="{{ request.POST.repo_url }}">
+                <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
+            </div>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary">Analizar</button>
             </div>
         </form>
     </div>
@@ -30,8 +43,8 @@
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-body">
-                        <h3 class="card-title">Commits Totales</h3>
-                        {{ graphs.commits_timeline|safe }}
+                        <h3 class="card-title">Actividad de Commits</h3>
+                        {{ graphs.commits_activity|safe }}
                     </div>
                 </div>
             </div>
@@ -47,15 +60,63 @@
                 <div class="card">
                     <div class="card-body">
                         <h3 class="card-title">Lenguajes Utilizados</h3>
-                        {{ graphs.languages|safe }}
+                        {% if languages %}
+                            <div class="languages-container">
+                                {% for lang in languages %}
+                                <div class="language-item mb-3">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <span class="language-name">{{ lang.name }}</span>
+                                        <span class="language-percentage">{{ lang.percentage }}%</span>
+                                    </div>
+                                    <div class="progress">
+                                        <div class="progress-bar" 
+                                             role="progressbar" 
+                                             style="width: {{ lang.percentage }}%; background-color: {{ lang.color }}"
+                                             aria-valuenow="{{ lang.percentage }}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">No se detectaron lenguajes</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
             <div class="col-md-6 mb-4">
                 <div class="card">
                     <div class="card-body">
-                        <h3 class="card-title">Librerías Detectadas</h3>
-                        {{ graphs.libraries|safe }}
+                        <h3 class="card-title">Librerías Principales Detectadas</h3>
+                        {% if libraries %}
+                            <div class="libraries-container">
+                                {% regroup libraries by type as library_list %}
+                                {% for type in library_list %}
+                                    <div class="library-type mb-3">
+                                        <h4 class="h6 mb-2">{{ type.grouper }}</h4>
+                                        <div class="row">
+                                            {% for lib in type.list %}
+                                            <div class="col-md-6 mb-2">
+                                                <div class="library-card p-2 border rounded">
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="fas fa-cube me-2"></i>
+                                                        <span class="library-name">{{ lib.name }}</span>
+                                                        {% if lib.version %}
+                                                        <span class="library-version ms-auto badge bg-secondary">{{ lib.version }}</span>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-info">No se detectaron librerías principales</div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
