@@ -44,27 +44,75 @@
                 <h5>Commits Totales</h5>
             </div>
             <div class="card-body">
-                <canvas id="commitsChart"></canvas>
+                <p>Total Commits: {{ repo_data.commit_count }}</p>
             </div>
         </div>
 
-        <!-- Distribución de commits por desarrollador -->
         <div class="card mb-4">
             <div class="card-header">
                 <h5>Distribución de Commits por Desarrollador</h5>
             </div>
             <div class="card-body">
-                <canvas id="contributorsChart"></canvas>
+                <ul class="list-group">
+                    {% for contributor, count in repo_data.contributors.items %}
+                    <li class="list-group-item">
+                        <strong>{{ contributor }}:</strong> {{ count }} commits
+                    </li>
+                    {% endfor %}
+                </ul>
             </div>
         </div>
 
-        <!-- Lenguajes utilizados -->
+        <!-- Languages section -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5>Lenguajes y Librerías</h5>
+                <h5>Lenguajes Utilizados</h5>
             </div>
             <div class="card-body">
-                <canvas id="languagesChart"></canvas>
+                {% if repo_data.languages %}
+                    <ul class="list-group">
+                        {% for lang in repo_data.languages %}
+                            <li class="list-group-item">
+                                <strong>{{ lang.name }}:</strong> {{ lang.percentage }}%
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No se encontraron datos de lenguajes</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Commits por Ramas section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Commits por Ramas y Colaboradores</h5>
+            </div>
+            <div class="card-body">
+                {% if commit_analysis %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Rama</th>
+                                    <th>Autor</th>
+                                    <th>Commits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in commit_analysis %}
+                                    <tr>
+                                        <td>{{ row.Branch }}</td>
+                                        <td>{{ row.Author }}</td>
+                                        <td>{{ row.Commits }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No se encontraron datos de commits por rama</p>
+                {% endif %}
             </div>
         </div>
 
@@ -83,6 +131,7 @@
                 </ul>
             </div>
         </div>
+
 
         <!-- Download PDF Button -->
         {% if pdf_path %}
