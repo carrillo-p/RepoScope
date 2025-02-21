@@ -5,14 +5,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 import fitz  # PyMuPDF
 from github import Github
 from django.shortcuts import render
-from django.core.files.storage import FileSystemStorage
+from django.core.files.storage import default_storage
+from django.core.files.base import ContentFile
 from reportlab.pdfgen import canvas
 from django.http import FileResponse
 from django.contrib import messages
 from dotenv import load_dotenv
-from repo_cloner import clone_repo  # Import the repo cloning module
-from stats import analyze_commits  # Import the commit analysis module
-
+from repo_cloner import clone_repo  
+from stats import analyze_commits  
+from stats import analyze_commits, check_compliance_with_briefing, extract_text_from_pdf, extract_text_from_repo
 
 load_dotenv()
 GITHUB_API_URL = "https://api.github.com/repos"
@@ -86,38 +87,38 @@ def fetch_github_data(repo_url):
             "languages": []
         }
 
-def analyze_repository(repo_url, briefing_text=None):
-    """Clone and analyze a GitHub repository"""
+def analyze_repository(repo_url, briefing_file=None):
+    """Clone and analyze a GitHub repository."""
     repo_path = clone_repo(repo_url)
 
     if not repo_path:
-        return {}, {}, {}
+        return {}, {}, "", None
 
-    # Analyze commits across all branches
+    # Extract repository content
+    repo_docs = extract_text_from_repo(repo_path)
+
+    # Extract briefing content if provided
+    briefing_text = None
+    if briefing_file:
+        briefing_text = extract_text_from_pdf(briefing_file)
+
+    # Analyze commits
     commit_stats = analyze_commits(repo_path)
 
-    compliance_results = {
-        "Essential Level": {
-            "Extract files": "✅ Completed",
-            "Compare with briefing": "✅ Completed" if briefing_text else "❌ Not Provided",
-            "Basic compliance report": "✅ Completed",
-            "Score": "75%"
-        },
-        "Medium Level": {
-            "Dockerized application": "❌ Not Implemented",
-            "Code improvement suggestions": "❌ Not Implemented",
-            "API Key for LLM selection": "✅ Implemented",
-            "Score": "33%"
-        },
-        "Advanced Level": {
-            "Coding standards evaluation": "❌ Not Implemented",
-            "Dependency & vulnerability analysis": "❌ Not Implemented",
-            "Score": "0%"
-        },
-        "Overall Compliance Score": "36%"
-    }
+    # Compare repository with briefing (if available)
+    compliance_results = check_compliance_with_briefing(repo_docs, briefing_text) if briefing_text else []
+    if not compliance_results:
+        print("No compliance results found!")
 
-    return compliance_results, commit_stats
+    # Generate Markdown-style compliance results
+    markdown_compliance_results = "**Compliance Report**\n\n"
+    for result in compliance_results:
+        status = "✅ Compliant" if result["compliant"] else "❌ Non-Compliant"
+        markdown_compliance_results += f"- **Section:** {result['section']}...\n"
+        markdown_compliance_results += f"  - **Similarity:** {result['similarity']}%\n"
+        markdown_compliance_results += f"  - **Status:** {status}\n\n"
+
+    return compliance_results, commit_stats, markdown_compliance_results, briefing_text
 
 def generate_pdf_report(compliance_results, repo_data, commit_analysis, briefing_name):
     """Generate a detailed PDF report of the compliance analysis."""
@@ -201,7 +202,7 @@ def generate_pdf_report(compliance_results, repo_data, commit_analysis, briefing
         c.setFont("Helvetica", 12)
         y -= 20
         
-        for level, details in compliance_results.items():
+        '''for level, details in compliance_results.items():
             if isinstance(details, dict):
                 c.drawString(120, y, f"{level}: {details.get('Score', 'N/A')}")
                 y -= 20
@@ -211,7 +212,14 @@ def generate_pdf_report(compliance_results, repo_data, commit_analysis, briefing
                         y -= 20
             else:
                 c.drawString(120, y, f"{level}: {details}")
-                y -= 20
+                y -= 20'''
+        for result in compliance_results:
+            status = "✅ Compliant" if result["compliant"] else "❌ Non-Compliant"
+            c.drawString(120, y, f"Section: {result['section'][:50]}...")  # Truncate section
+            c.drawString(140, y - 20, f"Similarity: {result['similarity']}%")
+            c.drawString(140, y - 40, f"Status: {status}")
+            y -= 60
+
 
         c.save()
         return pdf_path
@@ -223,37 +231,31 @@ def analysis(request):
     compliance_results = {}
     repo_data = {}
     commit_analysis = {}
+    markdown_compliance_results = ""
     pdf_path = None
-    briefing_text = None
 
     if request.method == "POST":
         repo_url = request.POST.get("repo_url")
         briefing_file = request.FILES.get("briefing")
 
-        if briefing_file:
-            try:
-                briefing_name = briefing_file.name.split(".")[0]
-                fs = FileSystemStorage()
-                file_path = fs.save(f"uploads/{briefing_file.name}", briefing_file)
-                full_file_path = fs.path(file_path)
-
-                # Extract text from the PDF
-                doc = fitz.open(full_file_path)
-                briefing_text = " ".join([page.get_text() for page in doc])
-            except Exception as e:
-                messages.error(request, f"Error processing briefing file: {str(e)}")
-
         try:
+            # Save PDF to a temporary path
+            briefing_text = None
+            if briefing_file:
+                briefing_filename = default_storage.save(f"briefings/{briefing_file.name}", ContentFile(briefing_file.read()))
+                briefing_path = default_storage.path(briefing_filename)
+                briefing_text = extract_text_from_pdf(briefing_path)
+
             # Fetch GitHub API data
             repo_data = fetch_github_data(repo_url)
 
             # Clone and analyze repository
-            compliance_results, commit_analysis = analyze_repository(repo_url, briefing_text)
+            compliance_results, commit_analysis, markdown_compliance_results, _ = analyze_repository(repo_url, briefing_path)
 
             if compliance_results and repo_data:
-                # Generate PDF report only if we have data
-                pdf_path = generate_pdf_report(compliance_results, repo_data, commit_analysis, 
-                                             briefing_name if briefing_file else "analysis")
+                # Generate PDF report if data is available
+                pdf_path = generate_pdf_report(compliance_results, repo_data, commit_analysis, briefing_file.name if briefing_file else "analysis")
+
         except Exception as e:
             messages.error(request, f"Error analyzing repository: {str(e)}")
 
@@ -261,5 +263,6 @@ def analysis(request):
         "compliance_results": compliance_results,
         "repo_data": repo_data,
         "commit_analysis": commit_analysis,
+        "markdown_compliance_results": markdown_compliance_results,
         "pdf_path": pdf_path
     })

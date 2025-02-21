@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load static %}
 
 {% block title %}Análisis Detallado - RepoScope{% endblock %}
 
@@ -119,18 +120,18 @@
         <!-- Compliance Report Section -->
         <div class="card mb-4">
             <div class="card-header">
-                <h5>Informe de Cumplimiento</h5>
+                <h2>Informe de Cumplimiento</h2>
             </div>
             <div class="card-body">
-                <ul class="list-group">
-                    {% for key, value in compliance_results.items %}
-                        <li class="list-group-item">
-                            <strong>{{ key }}:</strong> {{ value }}
-                        </li>
-                    {% endfor %}
-                </ul>
+                {% if markdown_compliance_results %}
+                    <div class="alert alert-info">
+                        <pre>{{ markdown_compliance_results }}</pre>
+                    </div>
+                {% else %}
+                    <p>No compliance results available.</p>
+                {% endif %}
             </div>
-        </div>
+        </div>       
 
 
         <!-- Download PDF Button -->

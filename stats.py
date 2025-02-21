@@ -1,10 +1,14 @@
 from github import Github
 import pandas as pd
 import os
+import fitz
 from dotenv import load_dotenv
 import matplotlib.pyplot as plt
 import seaborn as sns
 from git import Repo
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS
+from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
@@ -51,6 +55,62 @@ def save_commit_stats(stats, output_path="commit_stats.csv"):
     """Save commit statistics to a CSV file."""
     stats.to_csv(output_path, index=False)
     print(f"Commit stats saved to {output_path}")
+
+def extract_text_from_repo(repo_path):
+    """
+    Extracts text content from files in a given repository path.
+    Returns a list of extracted text from each file.
+    """
+    repo_docs = []
+    for root, _, files in os.walk(repo_path):
+        for file in files:
+            if file.endswith((".py", ".md", ".txt", ".js", ".html", ".css")): 
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        repo_docs.append(f.read())
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}")
+    return repo_docs
+
+def extract_text_from_pdf(pdf_path):
+    """
+    Extracts text from a given PDF file.
+    """
+    text = ""
+    try:
+        doc = fitz.open(pdf_path)
+        text = " ".join([page.get_text() for page in doc])
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+    return text
+
+def check_compliance_with_briefing(repo_docs, briefing_text):
+    """
+    Compares repository content with briefing requirements using vector embeddings.
+    """
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+
+    # Convert briefing text to embeddings
+    briefing_embedding = embeddings.embed_query(briefing_text)
+
+    # Convert repository text to embeddings
+    repo_embeddings = [embeddings.embed_query(doc) for doc in repo_docs]
+
+    # Compute similarity scores
+    similarities = cosine_similarity([briefing_embedding], repo_embeddings)[0]
+
+    compliance_results = []
+    threshold = 0.7  # Minimum similarity for compliance
+
+    for idx, sim in enumerate(similarities):
+        compliance_results.append({
+            "section": repo_docs[idx][:100],  
+            "similarity": round(sim * 100, 2),
+            "compliant": sim >= threshold
+        })
+
+    return compliance_results
 
 def generate_visualizations(stats, output_path='.'):
     """Generate and save commit visualizations."""

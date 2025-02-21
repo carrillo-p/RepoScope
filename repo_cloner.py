@@ -3,6 +3,7 @@ import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
 from git import Repo, exc
+from src.RAG_analyzer import GitHubRAGAnalyzer
 
 # Load environment variables
 load_dotenv()
@@ -31,3 +32,11 @@ def get_all_branches(repo_path):
     except exc.GitCommandError as e:
         print(f"Error fetching branches: {e}")
         return []
+    
+def process_repo_with_rag(repo_path):
+    """
+    Processes a cloned repo using RAG analysis.
+    """
+    analyzer = GitHubRAGAnalyzer()
+    results = analyzer.process_repository(repo_path)
+    return results
