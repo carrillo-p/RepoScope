@@ -18,6 +18,8 @@ load_dotenv()
 GITHUB_API_URL = "https://api.github.com/repos"
 TOKEN = os.getenv("GITHUB_TOKEN")
 
+g = Github(TOKEN)
+
 def home(request):
     return render(request, 'home.html')
 
