@@ -25,43 +25,29 @@ def fetch_github_data(repo_url):
     """Fetch commit, contributor, language, and branch data from GitHub API."""
     try:
         repo_name = repo_url.split("github.com/")[-1].strip("/")
+
         if "tree" in repo_name:
-            repo_name = repo_name.split("/tree/")[0]
-        
-        headers = {"Authorization": f"token {TOKEN}", "Accept": "application/vnd.github.v3+json"}
+                repo_name = repo_name.split("/tree/")[0]
 
-        # Fetch branches
-        branches_response = requests.get(f"{GITHUB_API_URL}/{repo_name}/branches", headers=headers)
-        if branches_response.status_code != 200:
-            raise Exception(f"Failed to fetch branches: {branches_response.json().get('message', '')}")
-        
-        branches = branches_response.json()
+        repo = g.get_repo(repo_name)
+        branches = list(repo.get_branches())
 
-        # Fetch commits across all branches
         commit_count = 0
         contributors_data = {}
 
         for branch in branches:
-            branch_name = branch["name"]
-            commits_response = requests.get(f"{GITHUB_API_URL}/{repo_name}/commits?sha={branch_name}", headers=headers)
-            commits = commits_response.json() if commits_response.status_code == 200 else []
-            commit_count += len(commits)
+            commits = repo.get_commits(sha=branch.name)
+            branch_commits = list(commits)
+            commit_count += len(branch_commits)
 
-            # Collect contributors
-            for commit in commits:
-                author = commit.get("author", {})
-                if author:
-                    login = author.get("login", "Unknown")
-                    contributors_data[login] = contributors_data.get(login, 0) + 1
-
-        # Fetch languages using PyGithub
-        g = Github(TOKEN)
-        repo = g.get_repo(repo_name)
+            for commit in branch_commits:
+                    author = commit.author.login if commit.author else "Unknown"
+                    contributors_data[author] = contributors_data.get(author, 0) + 1
+        
         languages = repo.get_languages()
-
-        # Process language data
         total_bytes = sum(languages.values()) if languages else 0
         languages_data = []
+        
         if total_bytes > 0:
             languages_data = [
                 {
@@ -72,20 +58,21 @@ def fetch_github_data(repo_url):
             ]
 
         return {
-            "branches": [b["name"] for b in branches],
+            "branches": [b.name for b in branches],
             "commit_count": commit_count,
             "contributors": contributors_data,
             "languages": languages_data
-        }
-    except Exception as e:
-        print(f"Error in fetch_github_data: {str(e)}")
-        return {
-            "branches": [],
-            "commit_count": 0,
-            "contributors": {},
-            "languages": []
-        }
+        }   
 
+    except Exception as e:
+            print(f"Error in fetch_github_data: {str(e)}")
+            return {
+                "branches": [],
+                "commit_count": 0,
+                "contributors": {},
+                "languages": []
+            } 
+        
 def analyze_repository(repo_url, briefing_file=None):
     """Clone and analyze a GitHub repository."""
     repo_path = clone_repo(repo_url)
