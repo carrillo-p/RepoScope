@@ -11,8 +11,7 @@ from reportlab.pdfgen import canvas
 from django.http import FileResponse
 from django.contrib import messages
 from dotenv import load_dotenv
-from repo_cloner import clone_repo  
-from stats import analyze_commits  
+from repo_cloner import clone_repo   
 from stats import analyze_commits, check_compliance_with_briefing, extract_text_from_pdf, extract_text_from_repo
 
 load_dotenv()

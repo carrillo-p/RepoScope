@@ -123,15 +123,27 @@
                 <h2>Informe de Cumplimiento</h2>
             </div>
             <div class="card-body">
-                {% if markdown_compliance_results %}
-                    <div class="alert alert-info">
-                        <pre>{{ markdown_compliance_results }}</pre>
-                    </div>
+                {% if compliance_results %}
+                    <ul class="list-group">
+                        {% for result in compliance_results %}
+                            <li class="list-group-item">
+                                <h5 class="mb-2"><strong>Sección Analizada:</strong> {{ result.section }}</h5>
+                                <p><strong>Similitud:</strong> {{ result.similarity }}%</p>
+                                <p><strong>Estado:</strong> 
+                                    {% if result.compliant %}
+                                        <span class="badge bg-success">✅ Cumple</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">❌ No Cumple</span>
+                                    {% endif %}
+                                </p>
+                            </li>
+                        {% endfor %}
+                    </ul>
                 {% else %}
-                    <p>No compliance results available.</p>
+                    <p class="text-muted">No se encontraron resultados de cumplimiento.</p>
                 {% endif %}
             </div>
-        </div>       
+        </div>    
 
 
         <!-- Download PDF Button -->
