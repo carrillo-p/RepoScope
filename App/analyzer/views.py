@@ -259,16 +259,86 @@ def quick_analysis(request):
             return render(request, 'quick_analysis.html')
             
         try:
+            # Inicialización del analizador de GitHub
             analyzer = GitHubAnalyzer()
             repo = analyzer.github.get_repo(analyzer._extract_repo_name(repo_url))
             
-            # Análisis del repositorio
+            # Obtención de commits y autores de todas las ramas
+            branches = repo.get_branches()
+            all_commits = []
+            commit_authors = []
+
+            # Análisis de commits por rama
+            for branch in branches:
+                branch_commits = repo.get_commits(sha=branch.name)
+                for commit in branch_commits:
+                    if commit.sha not in [c.sha for c in all_commits]:
+                        all_commits.append(commit)
+                        author = None
+                        if commit.author:
+                            author = commit.author.login
+                        elif commit.commit.author.email:
+                            author = commit.commit.author.email
+                        else:
+                            author = commit.commit.author.name
+                        commit_authors.append(author)
+
+            # Verificación de commits encontrados
+            if not all_commits:
+                messages.warning(request, 'No se encontraron commits en este repositorio')
+                return render(request, 'quick_analysis.html')
+            
+            # Generación de visualizaciones
+            commit_data = pd.DataFrame({
+                'fecha': [c.commit.author.date.date() for c in all_commits],
+                'autor': commit_authors,
+                'hora': [c.commit.author.date.hour for c in all_commits],
+                'cantidad': 1
+            })
+
+            # Gráfica de actividad
+            fig_activity = go.Figure()
+            colors = px.colors.qualitative.Set1
+
+            for idx, autor in enumerate(commit_data['autor'].unique()):
+                df_autor = commit_data[commit_data['autor'] == autor]
+                df_daily = df_autor.groupby('fecha')['cantidad'].sum().reset_index()
+                
+                fig_activity.add_trace(
+                    go.Scatter(
+                        x=df_daily['fecha'],
+                        y=df_daily['cantidad'],
+                        name=autor,
+                        mode='lines+markers'
+                    )
+                )
+
+            # Gráfica de distribución de autores
+            df_authors = pd.DataFrame(commit_authors, columns=['autor'])
+            author_counts = df_authors['autor'].value_counts()
+            
+            fig_authors = px.pie(
+                values=author_counts.values,
+                names=author_counts.index,
+                title='Distribución de Commits por Desarrollador'
+            )
+
+            # Análisis de lenguajes y estadísticas
             repo_stats = analyzer.get_repo_stats(repo_url)
+            languages_data = []
             
+            if repo_stats and "languages" in repo_stats:
+                languages_data = repo_stats['languages']
+
             context = {
-                'repo_stats': repo_stats,
+                'graphs': {
+                    'commits_activity': fig_activity.to_html(full_html=False),
+                    'developer_distribution': fig_authors.to_html(full_html=False)
+                },
+                'languages': languages_data,
+                'libraries': repo_stats.get('libraries', [])
             }
-            
+
             return render(request, 'quick_analysis.html', context)
                 
         except Exception as e:
