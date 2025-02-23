@@ -5,10 +5,14 @@ from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 import logging
-from github_getter import GitHubAnalyzer
-from briefing_analyzer import ComplianceAnalyzer
+from Github_getter import GitHubAnalyzer
+from Briefing_analyzer import ComplianceAnalyzer
 import json
 from tenacity import retry, stop_after_attempt, wait_exponential
+import sys
+
+root_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(root_dir)
 
 class GitHubRAGAnalyzer:
     """
