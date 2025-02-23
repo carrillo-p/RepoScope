@@ -225,7 +225,8 @@ def analysis(request):
                         "tier_analysis": analysis_results["tier_analysis"],
                         "analysis_date": analysis_results["analysis_date"],
                         "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
-                        "analysis_available": bool(analysis_results.get("tier_analysis"))
+                        "analysis_available": bool(analysis_results.get("tier_analysis")),
+                        "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", [])
                     })
 
                 except Exception as e:
