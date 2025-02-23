@@ -25,17 +25,18 @@ def quick_analysis(request):
             return render(request, 'quick_analysis.html')
             
         try:
-            # Initialize analyzer
+            # Inicialización del analizador de GitHub
             logger.info("Initializing GitHub analyzer")
             analyzer = GitHubAnalyzer()
             repo = analyzer.github.get_repo(analyzer._extract_repo_name(repo_url))
             
-            # Get all commits and authors
+            # Obtención de commits y autores de todas las ramas
             branches = repo.get_branches()
             logger.info(f"Found {len(list(branches))} branches")
             all_commits = []
             commit_authors = []
-            
+
+            # Análisis de commits por rama
             logger.info("Starting commit analysis")
             for branch in branches:
                 branch_commits = repo.get_commits(sha=branch.name)
@@ -51,6 +52,7 @@ def quick_analysis(request):
                             author = commit.commit.author.name
                         commit_authors.append(author)
 
+            # Verificación de commits encontrados
             if not all_commits:
                 logger.warning("No commits found in repository")
                 messages.warning(request, 'No se encontraron commits en este repositorio')
@@ -59,7 +61,8 @@ def quick_analysis(request):
             logger.info(f"Found {len(all_commits)} total commits")
 
             logger.info("Generating commit activity visualization")
-            # Create activity graph
+            
+            # Generación de visualización de actividad
             commit_data = pd.DataFrame({
                 'fecha': [c.commit.author.date.date() for c in all_commits],
                 'autor': commit_authors,
@@ -67,14 +70,16 @@ def quick_analysis(request):
                 'cantidad': 1
             })
 
-            # Create base figure
+            # Creación de gráfica de actividad
             fig_activity = go.Figure()
             colors = px.colors.qualitative.Set1
 
+            # Generación de series temporales por autor
             for idx, autor in enumerate(commit_data['autor'].unique()):
                 df_autor = commit_data[commit_data['autor'] == autor]
                 df_daily = df_autor.groupby('fecha')['cantidad'].sum().reset_index()
                 
+                # Completar fechas faltantes
                 fecha_min = commit_data['fecha'].min()
                 fecha_max = commit_data['fecha'].max()
                 todas_fechas = pd.date_range(start=fecha_min, end=fecha_max, freq='D').date
@@ -83,6 +88,7 @@ def quick_analysis(request):
                 df_completo = df_completo.merge(df_daily, on='fecha', how='left')
                 df_completo['cantidad'] = df_completo['cantidad'].fillna(0)
                 
+                # Añadir serie temporal al gráfico
                 fig_activity.add_trace(
                     go.Scatter(
                         x=df_completo['fecha'],
@@ -105,6 +111,7 @@ def quick_analysis(request):
                     )
                 )
 
+            # Configuración del layout de la gráfica de actividad
             fig_activity.update_layout(
                 title=f'Actividad de Commits por Desarrollador (Total: {len(all_commits)} commits)',
                 xaxis_title="Fecha",
@@ -137,7 +144,7 @@ def quick_analysis(request):
                 hovermode='x unified'
             )
 
-            # Developer distribution
+            # Generación de gráfica de distribución de desarrolladores
             try:
                 df_authors = pd.DataFrame(commit_authors, columns=['autor'])
                 author_counts = df_authors['autor'].value_counts()
@@ -170,7 +177,7 @@ def quick_analysis(request):
                     x=0.5, y=0.5, showarrow=False
                 )
 
-            # Get languages data
+            # Análisis de lenguajes utilizados
             logger.info("Analyzing repository languages")
             repo_stats = analyzer.get_repo_stats(repo_url)
             languages_data = []
@@ -188,7 +195,7 @@ def quick_analysis(request):
             else:
                 logger.warning("No language data available in repository stats")
 
-            # Libraries detection
+            # Detección de bibliotecas
             logger.info("Starting library detection")
 
             def parse_requirement_line(line):
@@ -197,7 +204,7 @@ def quick_analysis(request):
                 if not line or line.startswith('#'):
                     return None, None
                 
-                # Handle different version specifiers
+                # Manejo de diferentes especificadores de versión
                 for operator in ['>=', '==', '<=', '~=', '>', '<']:
                     if operator in line:
                         name, version = line.split(operator, 1)
@@ -206,6 +213,7 @@ def quick_analysis(request):
                 # Handle requirements without version
                 return line.lower(), None
 
+            # Lista de bibliotecas principales a detectar
             libraries_data = []
             main_libraries = {
                 # Python - Frameworks Web
@@ -296,6 +304,7 @@ def quick_analysis(request):
                     'asgiref'
             }
 
+            # Análisis de requirements.txt
             try:
                 requirements = repo.get_contents("requirements.txt")
                 content = requirements.decoded_content.decode()
@@ -323,7 +332,7 @@ def quick_analysis(request):
                 'libraries': libraries_data
             }
 
-            # JavaScript package.json
+            # Análisis de package.json (JavaScript)
             try:
                 package_json = repo.get_contents("package.json")
                 content = json.loads(package_json.decoded_content.decode())
@@ -344,7 +353,7 @@ def quick_analysis(request):
             except:
                 pass
 
-            # PHP composer.json
+            # Análisis de composer.json (PHP)
             try:
                 composer_json = repo.get_contents("composer.json")
                 content = json.loads(composer_json.decoded_content.decode())
@@ -359,9 +368,11 @@ def quick_analysis(request):
                             })
             except:
                 pass
-
+            
+            # Ordenar bibliotecas por tipo y nombre
             libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
+            # Preparar contexto para la plantilla
             context = {
                 'graphs': {
                     'commits_activity': fig_activity.to_html(full_html=False),

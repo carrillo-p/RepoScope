@@ -6,35 +6,45 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Create logs directory if it doesn't exist
+# Crear directorio de logs si no existe
 os.makedirs('logs', exist_ok=True)
 
-# Configure logging with both file and console handlers
+# Configuración del sistema de logging con manejadores de archivo y consola
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-# Create a custom logger for the GitHubAnalyzer
+# Crear un logger personalizado para GitHubAnalyzer
 logger = logging.getLogger('github_analyzer')
 logger.setLevel(logging.INFO)
 
-# Create handlers
+# Crear manejadores para archivo y consola
 file_handler = logging.FileHandler('logs/github_analyzer.log')
 console_handler = logging.StreamHandler()
 
-# Create formatters and add it to handlers
+# Crear formateadores y añadirlos a los manejadores
 log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 file_handler.setFormatter(log_format)
 console_handler.setFormatter(log_format)
 
-# Add handlers to the logger
+# Añadir manejadores al logger
 logger.addHandler(file_handler)
 logger.addHandler(console_handler)
 
 class GitHubAnalyzer:
+    """
+    Clase principal para analizar repositorios de GitHub.
+    Proporciona funcionalidades para extraer estadísticas, clonar repositorios
+    y generar visualizaciones.
+    """
+    
     def __init__(self):
-        """Inicializar analizador de GitHub con token"""
+        """
+        Inicialización del analizador.
+        Configura la conexión a GitHub usando el token de autenticación
+        almacenado en las variables de entorno.
+        """
         load_dotenv()
         self.token = os.getenv('GITHUB_TOKEN')
         self.github = Github(self.token)
@@ -43,10 +53,10 @@ class GitHubAnalyzer:
 
     def _extract_repo_name(self, repo_url):
         """
-        Extraer nombre del repositorio desde la URL de GitHub
+        Extrae el nombre del repositorio desde la URL de GitHub.
         
         Args:
-            repo_url (str): URL del repositorio de GitHub
+            repo_url (str): URL completa del repositorio
             
         Returns:
             str: Nombre del repositorio en formato 'propietario/repo'
@@ -58,15 +68,17 @@ class GitHubAnalyzer:
 
     def get_repo_stats(self, repo_url):
         """
-        Get repository statistics including branches, commits, contributors and languages
+        Obtiene estadísticas completas del repositorio incluyendo ramas, commits,
+        contribuidores y lenguajes de programación.
         
         Args:
-            repo_url (str): URL of the GitHub repository
+            repo_url (str): URL del repositorio de GitHub
             
         Returns:
-            dict: Repository statistics containing branches, commit count, contributors, and languages
+            dict: Estadísticas del repositorio con información detallada
         """
         try:
+            # Inicio del análisis y verificación de límites de la API
             self.logger.info(f"Starting repository analysis for: {repo_url}")
             rate_limit = self.github.get_rate_limit()
             self.logger.info(f"API Rate Limit remaining: {rate_limit.core.remaining}")
@@ -75,15 +87,16 @@ class GitHubAnalyzer:
                 self.logger.error("GitHub API rate limit exceeded")
                 return {"error": "API rate limit exceeded"}
             
+            # Obtener objeto del repositorio y sus ramas
             repo = self.github.get_repo(self._extract_repo_name(repo_url))
             branches = list(repo.get_branches())
 
-            # Initialize counters and data collection
+            # Inicialización de contadores y estructuras de datos
             commit_count = 0
             contributors_data = {}
             commits_by_branch_author = []
 
-            # Analyze commits by branch
+            # Análisis de commits por rama
             for branch in branches:
                 commits = repo.get_commits(sha=branch.name)
                 branch_commits = list(commits)
@@ -93,49 +106,49 @@ class GitHubAnalyzer:
                     author = commit.author.login if commit.author else "Unknown"
                     contributors_data[author] = contributors_data.get(author, 0) + 1
                     
-                    # Collect data for CSV
+                    # Recolección de datos para CSV
                     commits_by_branch_author.append({
                         'Branch': branch.name,
                         'Author': author,
-                        'Commits': 1  # Each commit counts as 1
+                        'Commits': 1
                     })
 
-            # Create DataFrame and group by Branch and Author
+            # Crear DataFrame y agrupar por rama y autor
             df_commits = pd.DataFrame(commits_by_branch_author)
             grouped_commits = df_commits.groupby(['Branch', 'Author'])['Commits'].sum().reset_index()
             grouped_commits_list = grouped_commits.to_dict('records')
 
-            # Save to CSV with timestamp
+            # Guardar estadísticas en CSV
             output_dir = 'github_stats'
             os.makedirs(output_dir, exist_ok=True)
             csv_path = os.path.join(output_dir, 'commits_by_branch_author.csv')
             grouped_commits.to_csv(csv_path, index=False)
             self.logger.info(f"Commit statistics saved to {csv_path}")
 
-            # Analyze languages
+            # Análisis de lenguajes de programación
             try:
                 self.logger.info("Attempting to get languages...")
                 repo = self.github.get_repo(self._extract_repo_name(repo_url))
                 
-                # Get languages (returns a dict where keys are languages and values are bytes of code)
+                # Obtener lenguajes (retorna dict con lenguajes y bytes de código)
                 languages = repo.get_languages()
                 self.logger.info(f"Raw language data: {languages}")
                 
                 if not languages:
                     self.logger.warning(f"No languages detected for repo: {repo.full_name}")
-                    # Try to force a language detection update
+                    # Intentar forzar una actualización de detección de lenguajes
                     try:
                         default_branch = repo.default_branch
                         self.logger.info(f"Checking default branch: {default_branch}")
-                        # Get the latest commit to trigger language detection
                         latest_commit = repo.get_branch(default_branch).commit
                         self.logger.info(f"Latest commit: {latest_commit.sha}")
-                        languages = repo.get_languages()  # Try again after getting latest commit
+                        languages = repo.get_languages()
                     except Exception as e:
                         self.logger.error(f"Failed to force language detection: {str(e)}")
                         languages_data = []
                 
-                if languages:  # If we have languages after all attempts
+                # Procesamiento de datos de lenguajes
+                if languages:
                     total_bytes = sum(languages.values())
                     languages_data = [
                         {
@@ -153,6 +166,7 @@ class GitHubAnalyzer:
                 self.logger.error(f"Error in language detection: {str(lang_error)}", exc_info=True)
                 languages_data = []
 
+            # Retornar resultados completos
             return {
                 "branches": [b.name for b in branches],
                 "commit_count": commit_count,
@@ -172,26 +186,27 @@ class GitHubAnalyzer:
 
     def clone_repo(self, repo_url, target_dir="cloned_repo"):
         """
-        Clonar un repositorio de GitHub
+        Clona un repositorio de GitHub en el directorio local especificado.
         
         Args:
-            repo_url (str): URL del repositorio de GitHub
-            target_dir (str): Directorio destino para clonar el repositorio
+            repo_url (str): URL del repositorio a clonar
+            target_dir (str): Directorio destino para la clonación
         
         Returns:
             str: Ruta al directorio del repositorio clonado
         """
         try:
+            # Limpiar directorio existente si existe
             if os.path.exists(target_dir):
                 self.logger.info(f"Eliminando directorio existente: {target_dir}")
-                os.system(f"rd /s /q {target_dir}")  # Comando específico de Windows
+                os.system(f"rd /s /q {target_dir}")  # Comando Windows
 
+            # Obtener repositorio y sus contenidos
             repo = self.github.get_repo(self._extract_repo_name(repo_url))
-            
-            # Obtener contenidos de la rama principal y clonar
             contents = repo.get_contents("")
             os.makedirs(target_dir, exist_ok=True)
             
+            # Clonar archivos y directorios
             for content in contents:
                 if content.type == "dir":
                     os.makedirs(os.path.join(target_dir, content.path), exist_ok=True)
@@ -207,24 +222,29 @@ class GitHubAnalyzer:
         
     def generate_visualizations(self, stats_data, output_path='figures'):
         """
-        Generate and save visualizations of repository statistics
+        Genera y guarda visualizaciones de las estadísticas del repositorio.
         
         Args:
-            stats_data (dict): Repository statistics from get_repo_stats
-            output_path (str): Directory to save visualization files
+            stats_data (dict): Estadísticas del repositorio de get_repo_stats
+            output_path (str): Directorio para guardar las visualizaciones
         """
         try:
+            # Crear directorio de salida si no existe
             if not os.path.exists(output_path):
                 os.makedirs(output_path)
                 
-            # Convert data to DataFrame format
-            branch_data = pd.DataFrame({'Branch': stats_data['branches'], 
-                                        'Commits': [stats_data['commit_count']] * len(stats_data['branches'])})
+            # Convertir datos a formato DataFrame
+            branch_data = pd.DataFrame({
+                'Branch': stats_data['branches'], 
+                'Commits': [stats_data['commit_count']] * len(stats_data['branches'])
+            })
             
-            author_data = pd.DataFrame({'Author': list(stats_data['contributors'].keys()),
-                                        'Commits': list(stats_data['contributors'].values())})
+            author_data = pd.DataFrame({
+                'Author': list(stats_data['contributors'].keys()),
+                'Commits': list(stats_data['contributors'].values())
+            })
 
-            # Generate branch visualization
+            # Generar visualización de commits por rama
             plt.figure(figsize=(10, 6))
             sns.barplot(data=branch_data, x='Branch', y='Commits')
             plt.title('Total Commits by Branch')
@@ -233,7 +253,7 @@ class GitHubAnalyzer:
             plt.savefig(os.path.join(output_path, 'commits_by_branch.png'))
             plt.close()
 
-            # Generate author visualization 
+            # Generar visualización de commits por autor
             plt.figure(figsize=(10, 6))
             sns.barplot(data=author_data, x='Author', y='Commits')
             plt.title('Total Commits by Author')
@@ -249,18 +269,19 @@ class GitHubAnalyzer:
 
     def extract_text_from_repo(self, repo_path="cloned_repo"):
         """
-        Extracts text content from files in a given repository path.
+        Extrae el contenido de texto de los archivos en el repositorio.
         
         Args:
-            repo_path (str): Path to the local repository
+            repo_path (str): Ruta al repositorio local
             
         Returns:
-            list: List of extracted text content from supported file types
+            list: Lista de contenidos de texto extraídos de archivos soportados
         """
         try:
             repo_docs = []
             supported_extensions = (".py", ".md", ".txt", ".js", ".html", ".css")
             
+            # Recorrer todos los archivos del repositorio
             for root, _, files in os.walk(repo_path):
                 for file in files:
                     if file.endswith(supported_extensions): 

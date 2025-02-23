@@ -11,12 +11,21 @@ import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 class GitHubRAGAnalyzer:
+    """
+    Clase principal para analizar repositorios de GitHub usando RAG (Retrieval Augmented Generation)
+    y evaluarlos contra requisitos específicos de proyectos de IA
+    """
     def __init__(
         self,
         model_name: str = "mixtral-8x7b-32768",
         api_key: str = None
     ):
-        """Initialize GitHub RAG Analyzer with Groq integration"""
+        """
+        Inicialización del analizador con integración de Groq
+        Args:
+            model_name: Nombre del modelo de Groq a utilizar
+            api_key: Clave API de Groq (opcional, puede estar en .env)
+        """
         load_dotenv()
         self.model_name = model_name
         self.api_key = api_key or os.getenv("GROQ_API_KEY")
@@ -24,16 +33,17 @@ class GitHubRAGAnalyzer:
         if not self.api_key:
             raise ValueError("Groq API key required")
             
+        # Inicialización de componentes principales
         self.github_analyzer = GitHubAnalyzer()
         self.compliance_analyzer = ComplianceAnalyzer()
         
         self.setup_logging()
         self.initialize_groq()
         self.setup_prompts()
-        self.project_type = None  # Will be set during analysis
+        self.project_type = None  # Se establecerá durante el análisis
 
     def setup_logging(self):
-        """Configure logging system"""
+        """Configuración del sistema de logging para seguimiento y depuración"""
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s'
@@ -41,15 +51,22 @@ class GitHubRAGAnalyzer:
         self.logger = logging.getLogger(__name__)
 
     def initialize_groq(self):
-        """Initialize Groq LLM"""
+        """Inicialización del modelo de lenguaje Groq"""
         self.llm = ChatGroq(
             api_key=self.api_key,
             model_name=self.model_name
         )
 
     def detect_project_type(self, briefing_text: str) -> str:
-        """Detect project type from briefing content"""
+        """
+        Detecta el tipo de proyecto a partir del contenido del briefing
+        Args:
+            briefing_text: Texto del briefing a analizar
+        Returns:
+            str: Tipo de proyecto ('ml', 'nlp', o 'genai')
+        """
         try:
+            # Prompt para la detección del tipo de proyecto
             prompt = """
             Analiza el siguiente texto de briefing y determina el tipo de proyecto.
             Clasifica entre: 'ml' (Machine Learning), 'nlp' (Procesamiento de Lenguaje Natural), 
@@ -69,6 +86,7 @@ class GitHubRAGAnalyzer:
             response = self.llm.invoke(messages)
             project_type = response.content.strip().lower()
             
+            # Validación del tipo de proyecto
             if project_type not in ['ml', 'nlp', 'genai']:
                 self.logger.warning(f"Tipo de proyecto no reconocido: {project_type}. Usando 'ml' por defecto.")
                 return 'ml'
@@ -80,7 +98,10 @@ class GitHubRAGAnalyzer:
             return 'ml'
     
     def setup_prompts(self):
-        """Configure analysis prompts based on project type"""
+        """
+        Configura las descripciones de los niveles de competencia según el tipo de proyecto
+        Establece criterios específicos para cada nivel y tipo de proyecto
+        """
         self.tier_descriptions = {
             "nivel_esencial": {
                 "ml": "Funcionalidad básica de machine learning (preprocesamiento, entrenamiento, evaluación)",
@@ -105,9 +126,16 @@ class GitHubRAGAnalyzer:
         }
 
     def analyze_requirements_completion(self, repo_url: str, briefing_path: str) -> Dict[str, Any]:
-        """Analyze repository against briefing requirements"""
+        """
+        Analiza un repositorio contra los requisitos del briefing
+        Args:
+            repo_url: URL del repositorio a analizar
+            briefing_path: Ruta al archivo del briefing
+        Returns:
+            Dict: Resultados del análisis
+        """
         try:
-            # Get repository information
+            # Obtención de información del repositorio
             repo_path = self.github_analyzer.clone_repo(repo_url)
             if not repo_path:
                 raise ValueError("Failed to clone repository")
@@ -115,7 +143,7 @@ class GitHubRAGAnalyzer:
             repo_docs = self.github_analyzer.extract_text_from_repo(repo_path)
             repo_stats = self.github_analyzer.get_repo_stats(repo_url)
             
-            # Get briefing text and detect project type
+            # Extracción del briefing y detección del tipo de proyecto
             briefing_text = self.compliance_analyzer.extract_text_from_pdf(briefing_path)
             if not briefing_text:
                 raise ValueError("Failed to extract briefing text")
@@ -123,7 +151,7 @@ class GitHubRAGAnalyzer:
             self.project_type = self.detect_project_type(briefing_text)
             self.logger.info(f"Detected project type: {self.project_type}")
             
-            # Extract requirements and generate analysis
+            # Análisis de requisitos y generación de resultados
             tier_requirements = self.extract_tier_requirements(briefing_text)
             
             if not tier_requirements:
@@ -150,8 +178,15 @@ class GitHubRAGAnalyzer:
             }
 
     def extract_tier_requirements(self, briefing_text: str) -> Dict[str, List[str]]:
-        """Extract AI/ML project requirements by tier"""
+        """
+        Extrae los requisitos por nivel del briefing
+        Args:
+            briefing_text: Texto del briefing
+        Returns:
+            Dict: Requisitos organizados por nivel
+        """
         try:
+            # Plantilla para la respuesta JSON esperada
             json_template = '''
     {
         "nivel_esencial": ["requisito1", "requisito2"],
@@ -160,6 +195,7 @@ class GitHubRAGAnalyzer:
         "nivel_experto": ["requisito1", "requisito2"]
     }
     '''
+            # Prompt para la extracción de requisitos
             prompt = f"""
                 Analiza este texto de briefing y extrae los requisitos para cada nivel.
                 Enfócate en requisitos técnicos específicos de {self.project_type.upper()}.
@@ -200,9 +236,10 @@ class GitHubRAGAnalyzer:
                 HumanMessage(content=prompt)
             ]
             
+            # Procesamiento de la respuesta
             response = self.llm.invoke(messages)
             
-            # Clean and validate response
+            # Limpieza y validación de la respuesta JSON
             try:
                 response_text = response.content.strip()
                 if not response_text.startswith('{'):
@@ -226,9 +263,20 @@ class GitHubRAGAnalyzer:
         repo_docs: List[str],
         repo_stats: Dict
     ) -> Dict[str, Any]:
-        """Generate AI/ML project analysis"""
+        """
+        Genera el análisis detallado del proyecto
+        Args:
+            tier_requirements: Requisitos por nivel
+            repo_docs: Documentos del repositorio
+            repo_stats: Estadísticas del repositorio
+        Returns:
+            Dict: Análisis completo del proyecto
+        """
         try:
+            # Preparación del contenido para el análisis
             repo_content = "\n".join(repo_docs)
+            
+            # Prompt detallado para el análisis
             prompt = f"""
             Analiza este repositorio de {self.project_type.upper()} contra los requisitos especificados.
             Proporciona un análisis técnico detallado enfocado en calidad y completitud.
@@ -307,8 +355,10 @@ class GitHubRAGAnalyzer:
                 HumanMessage(content=prompt)
             ]
             
+            # Procesamiento de la respuesta
             response = self.llm.invoke(messages)
             
+            # Limpieza y validación de la respuesta JSON
             try:
                 response_text = response.content.strip()
                 if not response_text.startswith('{'):
@@ -318,7 +368,7 @@ class GitHubRAGAnalyzer:
                 
                 analysis_result = json.loads(response_text)
                 
-                # Validate required fields
+                # Validación de campos requeridos
                 required_fields = ['evaluacion_general', 'analisis_por_nivel', 'analisis_tecnico', 
                                  'recomendaciones', 'puntuacion_madurez']
                 for field in required_fields:
@@ -333,6 +383,7 @@ class GitHubRAGAnalyzer:
 
         except Exception as e:
             self.logger.error(f"Error generating tier analysis: {e}")
+            # Retorna una estructura de error predeterminada
             return {
                 "evaluacion_general": "Error al generar el análisis.",
                 "analisis_por_nivel": {

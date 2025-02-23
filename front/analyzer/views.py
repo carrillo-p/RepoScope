@@ -18,24 +18,33 @@ import shutil
 load_dotenv()
 
 def home(request):
-    """Render home page"""
+    """Vista para renderizar la página principal"""
     return render(request, 'home.html')
 
 def generate_pdf_report(analysis_results, briefing_name):
-    """Generate a detailed PDF report of the analysis results"""
+    """
+    Genera un informe PDF detallado de los resultados del análisis
+    Args:
+        analysis_results: Resultados del análisis del repositorio
+        briefing_name: Nombre del archivo briefing original
+    Returns:
+        str: Ruta al archivo PDF generado
+    """
     try:
+        # Preparación del nombre y ruta del archivo PDF
         clean_name = briefing_name.lower().replace('.pdf', '')
         pdf_name = f"Informe_Analisis_{clean_name}.pdf"
         pdf_path = os.path.join("static/reports", pdf_name)
         os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
+        # Inicialización del documento PDF
         c = canvas.Canvas(pdf_path)
         
-        # Title
+        # Título del informe
         c.setFont("Helvetica", 16)
         c.drawString(100, 800, "Informe de Análisis por Niveles")
         
-        # Project Type
+        # Tipo de proyecto y mapeo para visualización
         c.setFont("Helvetica", 14)
         project_type_map = {
             'ml': 'Machine Learning',
@@ -44,28 +53,29 @@ def generate_pdf_report(analysis_results, briefing_name):
         }
         c.drawString(100, 770, f"Tipo de Proyecto: {project_type_map.get(analysis_results['project_type'], 'N/A')}")
         
-        # Repository Statistics
+        # Estadísticas del repositorio
         repo_stats = analysis_results['repository_stats']
-        y = 740
+        y = 740  # Posición vertical inicial
         c.setFont("Helvetica", 14)
         c.drawString(100, y, "1. Estadísticas del Repositorio")
         c.setFont("Helvetica", 12)
         y -= 20
         
-        # Basic Stats and Languages
+        # Estadísticas básicas y lenguajes utilizados
         c.drawString(120, y, f"Total Commits: {repo_stats['commit_count']}")
         y -= 20
         c.drawString(120, y, f"Lenguajes: {', '.join([f'{l['name']} ({l['percentage']}%)' for l in repo_stats['languages']])}")
         y -= 40
 
-        # Tier Analysis
+        # Análisis por niveles
         tier_analysis = analysis_results['tier_analysis']
         c.setFont("Helvetica", 14)
         c.drawString(100, y, "2. Análisis por Niveles")
         y -= 30
 
+        # Generar sección para cada nivel de análisis
         for nivel in ['nivel_esencial', 'nivel_medio', 'nivel_avanzado', 'nivel_experto']:
-            if y < 100:  # New page if needed
+            if y < 100:  # Nueva página si es necesario
                 c.showPage()
                 y = 750
             
@@ -75,10 +85,11 @@ def generate_pdf_report(analysis_results, briefing_name):
             c.setFont("Helvetica", 12)
             y -= 20
             
+            # Porcentaje de completitud
             c.drawString(120, y, f"Completitud: {nivel_data['porcentaje_completitud']}%")
             y -= 20
             
-            # Requirements met/unmet
+            # Requisitos cumplidos y faltantes
             if nivel_data['requisitos_cumplidos']:
                 c.drawString(120, y, "Requisitos Cumplidos:")
                 y -= 20
@@ -95,7 +106,7 @@ def generate_pdf_report(analysis_results, briefing_name):
             
             y -= 20
 
-        # Technical Analysis
+        # Análisis técnico
         if y < 200:
             c.showPage()
             y = 750
@@ -105,12 +116,13 @@ def generate_pdf_report(analysis_results, briefing_name):
         y -= 30
         c.setFont("Helvetica", 12)
         
+        # Detalles del análisis técnico
         tech_analysis = tier_analysis['analisis_tecnico']
         for key, value in tech_analysis.items():
             c.drawString(120, y, f"{key.replace('_', ' ').title()}: {value[:80]}")
             y -= 20
 
-        # Recommendations
+        # Recomendaciones
         if y < 200:
             c.showPage()
             y = 750
@@ -120,11 +132,12 @@ def generate_pdf_report(analysis_results, briefing_name):
         y -= 30
         c.setFont("Helvetica", 12)
         
+        # Lista de recomendaciones
         for rec in tier_analysis['recomendaciones']:
             c.drawString(120, y, f"• {rec[:80]}")
             y -= 20
 
-        # Maturity Score
+        # Puntuación final de madurez
         c.setFont("Helvetica", 14)
         c.drawString(100, y-30, f"Puntuación de Madurez: {tier_analysis['puntuacion_madurez']}/100")
 
@@ -135,22 +148,27 @@ def generate_pdf_report(analysis_results, briefing_name):
         return None
 
 def analysis(request):
-    """Handle repository analysis request"""
+    """
+    Maneja la solicitud de análisis del repositorio
+    Procesa el formulario, realiza el análisis y genera el informe
+    """
     if request.method == "POST":
         repo_url = request.POST.get("repo_url")
         briefing_file = request.FILES.get("briefing")
-        temp_files = []  # Track files to clean up
+        temp_files = []  # Registro de archivos temporales para limpieza
 
+        # Validación de entrada
         if not repo_url:
             messages.error(request, "Please provide a repository URL")
             return render(request, "analysis.html")
 
         try:
-            # Initialize analyzer
+            # Inicialización del analizador
             analyzer = GitHubRAGAnalyzer()
             
-            # Save and process briefing file
+            # Procesamiento del archivo de briefing
             if briefing_file:
+                # Guardar archivo de briefing
                 briefing_filename = default_storage.save(
                     f"briefings/{briefing_file.name}", 
                     ContentFile(briefing_file.read())
@@ -158,27 +176,29 @@ def analysis(request):
                 briefing_path = default_storage.path(briefing_filename)
                 temp_files.append(briefing_path)
                 
-                # Perform complete analysis
+                # Realizar análisis completo
                 analysis_results = analyzer.analyze_requirements_completion(
                     repo_url=repo_url,
                     briefing_path=briefing_path
                 )
                 
+                # Verificar errores en el análisis
                 if "error" in analysis_results:
                     raise ValueError(analysis_results["error"])
 
-                # Generate PDF report
+                # Generar informe PDF
                 pdf_path = generate_pdf_report(
                     analysis_results=analysis_results,
                     briefing_name=briefing_file.name
                 )
 
-                # Add cloned repo to cleanup list if it exists
+                # Añadir repo clonado a la lista de limpieza
                 cloned_repo_path = os.path.join(root_dir, "cloned_repo")
                 if os.path.exists(cloned_repo_path):
                     temp_files.append(cloned_repo_path)
 
                 try:
+                    # Gestión de descarga del PDF
                     response = None
                     if request.POST.get('download_pdf'):
                         response = FileResponse(
@@ -187,16 +207,18 @@ def analysis(request):
                             filename=os.path.basename(pdf_path)
                         )
                     
-                    # Clean up temporary files
+                    # Limpieza de archivos temporales
                     for file_path in temp_files:
                         if os.path.isdir(file_path):
                             shutil.rmtree(file_path, ignore_errors=True)
                         elif os.path.isfile(file_path):
                             os.remove(file_path)
                     
+                    # Retornar respuesta de descarga si es necesario
                     if response:
                         return response
 
+                    # Renderizar template con resultados
                     return render(request, "analysis.html", {
                         "project_type": analysis_results["project_type"],
                         "repo_data": analysis_results["repository_stats"],
@@ -214,7 +236,7 @@ def analysis(request):
                 
         except Exception as e:
             messages.error(request, f"Error analyzing repository: {str(e)}")
-            # Clean up in case of error
+            # Limpieza en caso de error
             for file_path in temp_files:
                 if os.path.isdir(file_path):
                     shutil.rmtree(file_path, ignore_errors=True)
