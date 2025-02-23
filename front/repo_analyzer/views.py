@@ -5,7 +5,7 @@ from django.http import JsonResponse
 import pandas as pd
 from django.contrib import messages
 import json
-from new_funct import GitHubAnalyzer
+from Github_getter import GitHubAnalyzer
 
 def quick_analysis(request):
     if request.method == 'POST':
