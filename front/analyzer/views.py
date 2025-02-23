@@ -5,6 +5,10 @@ from django.core.files.base import ContentFile
 from django.contrib import messages
 from reportlab.pdfgen import canvas
 from dotenv import load_dotenv
+import sys
+import os
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(root_dir)
 from RAG_analyzer import GitHubRAGAnalyzer
 
 load_dotenv()

@@ -5,8 +5,8 @@ from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage, SystemMessage
 from dotenv import load_dotenv
 import logging
-from Github_getter import GitHubAnalyzer
-from Briefing_analyzer import ComplianceAnalyzer
+from github_getter import GitHubAnalyzer
+from briefing_analyzer import ComplianceAnalyzer
 
 class GitHubRAGAnalyzer:
     def __init__(

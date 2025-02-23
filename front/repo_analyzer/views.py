@@ -5,26 +5,38 @@ from django.http import JsonResponse
 import pandas as pd
 from django.contrib import messages
 import json
-from Github_getter import GitHubAnalyzer
+import sys
+import os
+import logging
+root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(root_dir)
+from github_getter import GitHubAnalyzer
+
+logger = logging.getLogger('repo_analyzer.views')
 
 def quick_analysis(request):
     if request.method == 'POST':
+        logger.warning("No repository URL provided")
         repo_url = request.POST.get('repo_url')
-        
+        logger.info(f"Quick analysis requested for repository: {repo_url}")
+
         if not repo_url:
             messages.error(request, 'Por favor, proporciona una URL válida')
             return render(request, 'quick_analysis.html')
             
         try:
             # Initialize analyzer
+            logger.info("Initializing GitHub analyzer")
             analyzer = GitHubAnalyzer()
             repo = analyzer.github.get_repo(analyzer._extract_repo_name(repo_url))
             
             # Get all commits and authors
             branches = repo.get_branches()
+            logger.info(f"Found {len(list(branches))} branches")
             all_commits = []
             commit_authors = []
             
+            logger.info("Starting commit analysis")
             for branch in branches:
                 branch_commits = repo.get_commits(sha=branch.name)
                 for commit in branch_commits:
@@ -40,9 +52,13 @@ def quick_analysis(request):
                         commit_authors.append(author)
 
             if not all_commits:
+                logger.warning("No commits found in repository")
                 messages.warning(request, 'No se encontraron commits en este repositorio')
                 return render(request, 'quick_analysis.html')
             
+            logger.info(f"Found {len(all_commits)} total commits")
+
+            logger.info("Generating commit activity visualization")
             # Create activity graph
             commit_data = pd.DataFrame({
                 'fecha': [c.commit.author.date.date() for c in all_commits],
@@ -155,46 +171,157 @@ def quick_analysis(request):
                 )
 
             # Get languages data
-            languages = repo.get_languages()
+            logger.info("Analyzing repository languages")
+            repo_stats = analyzer.get_repo_stats(repo_url)
             languages_data = []
-            if languages:
-                total_bytes = sum(languages.values())
+            
+            if repo_stats and "languages" in repo_stats:
+                logger.info(f"Found languages: {repo_stats['languages']}")
                 languages_data = [
                     {
-                        'name': lang,
-                        'percentage': round((bytes_count / total_bytes) * 100, 1),
+                        'name': lang['name'],
+                        'percentage': lang['percentage'],
                         'color': px.colors.qualitative.Set3[i % len(px.colors.qualitative.Set3)]
                     }
-                    for i, (lang, bytes_count) in enumerate(sorted(
-                        languages.items(),
-                        key=lambda x: x[1],
-                        reverse=True
-                    ))
+                    for i, lang in enumerate(repo_stats['languages'])
                 ]
+            else:
+                logger.warning("No language data available in repository stats")
 
             # Libraries detection
+            logger.info("Starting library detection")
+
+            def parse_requirement_line(line):
+                """Parse a single requirement line."""
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    return None, None
+                
+                # Handle different version specifiers
+                for operator in ['>=', '==', '<=', '~=', '>', '<']:
+                    if operator in line:
+                        name, version = line.split(operator, 1)
+                        return name.strip().lower(), version.strip()
+                
+                # Handle requirements without version
+                return line.lower(), None
+
             libraries_data = []
             main_libraries = {
-                # [Your existing main_libraries set]
-                # Keep the existing library definitions here
+                # Python - Frameworks Web
+                    'django', 'flask', 'fastapi', 'pyramid', 'tornado', 'starlette',
+                    'aiohttp', 'sanic', 'bottle', 'dash',
+                    
+                    # Data Analysis
+                    'pandas', 'numpy', 'scipy', 'matplotlib', 'seaborn',
+                    'plotly', 'bokeh', 'altair', 'streamlit',
+                    'statsmodels', 'patsy', 'polars', 'vaex',
+                    'ydata-profiling', 'great-expectations',
+                    'dask', 'modin', 'koalas',
+                    
+                    # Data Science & Machine Learning
+                    'scikit-learn', 'tensorflow', 'pytorch', 'keras',
+                    'xgboost', 'lightgbm', 'catboost', 'rapids',
+                    'transformers', 'spacy', 'gensim', 'nltk',
+                    'opencv-python', 'pillow', 'scikit-image',
+                    'imbalanced-learn', 'optuna', 'hyperopt',
+                    'shap', 'lime', 'eli5', 'mlflow',
+                    'tensorboard', 'wandb', 'neptune-client',
+                    
+                    # Data Engineering
+                    'apache-airflow', 'prefect', 'dagster', 'luigi',
+                    'apache-beam', 'dbt-core', 'great-expectations',
+                    'feast', 'kedro', 'petl', 'bonobo',
+                    'sqlalchemy', 'alembic', 'psycopg2-binary',
+                    'pymongo', 'redis', 'elasticsearch',
+                    'pyspark', 'findspark', 'koalas',
+                    'kafka-python', 'confluent-kafka', 'faust-streaming',
+                    
+                    # Big Data & Cloud
+                    'boto3', 'google-cloud', 'azure-storage',
+                    'snowflake-connector-python', 'databricks-cli',
+                    'delta-spark', 'pyarrow', 'fastparquet',
+                    'dask', 'ray', 'modin', 'vaex',
+                    
+                    # Data Quality & Testing
+                    'pytest', 'unittest', 'nose', 'hypothesis',
+                    'great-expectations', 'pandera', 'cerberus',
+                    'faker', 'coverage', 'pylint', 'black',
+                    
+                    # Data Visualization
+                    'plotly', 'bokeh', 'altair', 'seaborn',
+                    'matplotlib', 'dash', 'streamlit', 'gradio',
+                    'holoviews', 'geoplotlib', 'folium', 'geopandas',
+                    
+                    # ETL & Data Processing
+                    'beautifulsoup4', 'scrapy', 'selenium',
+                    'requests', 'aiohttp', 'httpx',
+                    'pandas', 'numpy', 'polars', 'dask',
+                    'pyarrow', 'fastparquet', 'python-snappy',
+                    
+                    # Time Series
+                    'prophet', 'statsmodels', 'pmdarima',
+                    'neuralprophet', 'sktime', 'tslearn',
+                    'pyts', 'tsfresh', 'stumpy',
+                    
+                    # Deep Learning
+                    'tensorflow', 'torch', 'keras',
+                    'transformers', 'pytorch-lightning',
+                    'fastai', 'mxnet', 'jax', 'flax',
+                    
+                    # MLOps & Deployment
+                    'mlflow', 'kubeflow', 'bentoml', 'ray[serve]',
+                    'streamlit', 'gradio', 'dash',
+                    'fastapi', 'flask', 'docker',
+                    'kubernetes', 'seldon-core', 'triton',
+                    
+                    # Experiment Tracking
+                    'mlflow', 'wandb', 'neptune-client',
+                    'tensorboard', 'sacred', 'comet-ml',
+                    
+                    # Feature Stores
+                    'feast', 'hopsworks', 'tecton',
+                    
+                    # Model Monitoring
+                    'evidently', 'whylogs', 'arize',
+                    'great-expectations', 'deepchecks',
+                    
+                    # AutoML
+                    'auto-sklearn', 'autokeras', 'pycaret',
+                    'tpot', 'automl-gs', 'flaml', 'ludwig',
+                    
+                    # Additional libraries from requirements.txt
+                    'python-dotenv', 'pygithub', 'langchain-groq',
+                    'langchain-huggingface', 'reportlab', 'pymupdf',
+                    'asgiref'
             }
 
-            # Python requirements.txt
             try:
                 requirements = repo.get_contents("requirements.txt")
                 content = requirements.decoded_content.decode()
                 for line in content.split('\n'):
-                    if '==' in line:
-                        name, version = line.split('==')
-                        name = name.strip().lower()
-                        if name in main_libraries:
-                            libraries_data.append({
-                                'name': name,
-                                'version': version.strip(),
-                                'type': 'Python'
-                            })
-            except:
+                    name, version = parse_requirement_line(line)
+                    if name and name in main_libraries:
+                        lib_entry = {
+                            'name': name,
+                            'version': version if version else 'unspecified',
+                            'type': 'Python'
+                        }
+                        if lib_entry not in libraries_data:  # Avoid duplicates
+                            libraries_data.append(lib_entry)
+            except Exception as e:
+                logger.warning(f"Error reading requirements.txt: {str(e)}")
                 pass
+
+            logger.info("Analysis completed successfully")
+            context = {
+                'graphs': {
+                    'commits_activity': fig_activity.to_html(full_html=False),
+                    'developer_distribution': fig_authors.to_html(full_html=False)
+                },
+                'languages': languages_data,
+                'libraries': libraries_data
+            }
 
             # JavaScript package.json
             try:

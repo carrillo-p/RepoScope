@@ -6,17 +6,31 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Configurar logging
+# Create logs directory if it doesn't exist
+os.makedirs('logs', exist_ok=True)
+
+# Configure logging with both file and console handlers
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('github_analyzer.log'),
-        logging.StreamHandler()
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-logger = logging.getLogger(__name__)
+# Create a custom logger for the GitHubAnalyzer
+logger = logging.getLogger('github_analyzer')
+logger.setLevel(logging.INFO)
+
+# Create handlers
+file_handler = logging.FileHandler('logs/github_analyzer.log')
+console_handler = logging.StreamHandler()
+
+# Create formatters and add it to handlers
+log_format = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+file_handler.setFormatter(log_format)
+console_handler.setFormatter(log_format)
+
+# Add handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 class GitHubAnalyzer:
     def __init__(self):
@@ -24,7 +38,8 @@ class GitHubAnalyzer:
         load_dotenv()
         self.token = os.getenv('GITHUB_TOKEN')
         self.github = Github(self.token)
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger
+        self.logger.info("GitHub Analyzer inicializado")
 
     def _extract_repo_name(self, repo_url):
         """
@@ -52,6 +67,14 @@ class GitHubAnalyzer:
             dict: Repository statistics containing branches, commit count, contributors, and languages
         """
         try:
+            self.logger.info(f"Starting repository analysis for: {repo_url}")
+            rate_limit = self.github.get_rate_limit()
+            self.logger.info(f"API Rate Limit remaining: {rate_limit.core.remaining}")
+
+            if rate_limit.core.remaining < 1:
+                self.logger.error("GitHub API rate limit exceeded")
+                return {"error": "API rate limit exceeded"}
+            
             repo = self.github.get_repo(self._extract_repo_name(repo_url))
             branches = list(repo.get_branches())
 
@@ -89,18 +112,45 @@ class GitHubAnalyzer:
             self.logger.info(f"Commit statistics saved to {csv_path}")
 
             # Analyze languages
-            languages = repo.get_languages()
-            total_bytes = sum(languages.values()) if languages else 0
-            languages_data = []
-
-            if total_bytes > 0:
-                languages_data = [
-                    {
-                        "name": lang,
-                        "percentage": round((size / total_bytes) * 100, 2)
-                    }
-                    for lang, size in languages.items()
-                ]
+            try:
+                self.logger.info("Attempting to get languages...")
+                repo = self.github.get_repo(self._extract_repo_name(repo_url))
+                
+                # Get languages (returns a dict where keys are languages and values are bytes of code)
+                languages = repo.get_languages()
+                self.logger.info(f"Raw language data: {languages}")
+                
+                if not languages:
+                    self.logger.warning(f"No languages detected for repo: {repo.full_name}")
+                    # Try to force a language detection update
+                    try:
+                        default_branch = repo.default_branch
+                        self.logger.info(f"Checking default branch: {default_branch}")
+                        # Get the latest commit to trigger language detection
+                        latest_commit = repo.get_branch(default_branch).commit
+                        self.logger.info(f"Latest commit: {latest_commit.sha}")
+                        languages = repo.get_languages()  # Try again after getting latest commit
+                    except Exception as e:
+                        self.logger.error(f"Failed to force language detection: {str(e)}")
+                        languages_data = []
+                
+                if languages:  # If we have languages after all attempts
+                    total_bytes = sum(languages.values())
+                    languages_data = [
+                        {
+                            "name": lang,
+                            "percentage": round((size / total_bytes) * 100, 2),
+                            "bytes": size
+                        }
+                        for lang, size in languages.items()
+                    ]
+                    self.logger.info(f"Successfully processed languages: {languages_data}")
+                else:
+                    languages_data = []
+                    
+            except Exception as lang_error:
+                self.logger.error(f"Error in language detection: {str(lang_error)}", exc_info=True)
+                languages_data = []
 
             return {
                 "branches": [b.name for b in branches],
