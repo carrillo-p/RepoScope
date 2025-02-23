@@ -86,7 +86,8 @@ class GitHubRAGAnalyzer:
                 "repository_stats": repo_stats,
                 "compliance_results": compliance_results,
                 "llm_analysis": analysis,
-                "analysis_date": str(datetime.now())
+                "analysis_date": str(datetime.now()),
+                "commit_analysis": repo_stats.get('commit_analysis', [])
             }
 
         except Exception as e:

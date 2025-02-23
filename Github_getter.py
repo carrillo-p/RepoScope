@@ -103,6 +103,7 @@ class GitHubAnalyzer:
             # Create DataFrame and group by Branch and Author
             df_commits = pd.DataFrame(commits_by_branch_author)
             grouped_commits = df_commits.groupby(['Branch', 'Author'])['Commits'].sum().reset_index()
+            grouped_commits_list = grouped_commits.to_dict('records')
 
             # Save to CSV with timestamp
             output_dir = 'github_stats'
@@ -156,7 +157,8 @@ class GitHubAnalyzer:
                 "branches": [b.name for b in branches],
                 "commit_count": commit_count,
                 "contributors": contributors_data,
-                "languages": languages_data
+                "languages": languages_data,
+                "commit_analysis": grouped_commits_list
             }
 
         except Exception as e:
