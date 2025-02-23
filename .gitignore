@@ -173,3 +173,4 @@ cython_debug/
 # Archivos que se crean en el directorio
 cloned_repo/
 github_stats/
+reports/
