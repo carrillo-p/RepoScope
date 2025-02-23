@@ -72,3 +72,5 @@ wrapt==1.17.2
 langchain-community==0.3.18
 scikit-learn==1.6.1
 langchain-huggingface==0.1.2
+langchain-groq==0.2.4
+stats==0.1.2a0
