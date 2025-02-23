@@ -43,23 +43,24 @@ class GitHubAnalyzer:
 
     def get_repo_stats(self, repo_url):
         """
-        Obtener estadísticas del repositorio incluyendo ramas, commits, contribuidores y lenguajes
+        Get repository statistics including branches, commits, contributors and languages
         
         Args:
-            repo_url (str): URL del repositorio de GitHub
+            repo_url (str): URL of the GitHub repository
             
         Returns:
-            dict: Estadísticas del repositorio conteniendo ramas, cantidad de commits, contribuidores y lenguajes
+            dict: Repository statistics containing branches, commit count, contributors, and languages
         """
         try:
             repo = self.github.get_repo(self._extract_repo_name(repo_url))
             branches = list(repo.get_branches())
 
-            # Inicializar contadores
+            # Initialize counters and data collection
             commit_count = 0
             contributors_data = {}
+            commits_by_branch_author = []
 
-            # Analizar commits por rama
+            # Analyze commits by branch
             for branch in branches:
                 commits = repo.get_commits(sha=branch.name)
                 branch_commits = list(commits)
@@ -68,8 +69,26 @@ class GitHubAnalyzer:
                 for commit in branch_commits:
                     author = commit.author.login if commit.author else "Unknown"
                     contributors_data[author] = contributors_data.get(author, 0) + 1
+                    
+                    # Collect data for CSV
+                    commits_by_branch_author.append({
+                        'Branch': branch.name,
+                        'Author': author,
+                        'Commits': 1  # Each commit counts as 1
+                    })
 
-            # Analizar lenguajes del repositorio
+            # Create DataFrame and group by Branch and Author
+            df_commits = pd.DataFrame(commits_by_branch_author)
+            grouped_commits = df_commits.groupby(['Branch', 'Author'])['Commits'].sum().reset_index()
+
+            # Save to CSV with timestamp
+            output_dir = 'github_stats'
+            os.makedirs(output_dir, exist_ok=True)
+            csv_path = os.path.join(output_dir, 'commits_by_branch_author.csv')
+            grouped_commits.to_csv(csv_path, index=False)
+            self.logger.info(f"Commit statistics saved to {csv_path}")
+
+            # Analyze languages
             languages = repo.get_languages()
             total_bytes = sum(languages.values()) if languages else 0
             languages_data = []
@@ -175,3 +194,35 @@ class GitHubAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Error generating visualizations: {e}")
+
+    def extract_text_from_repo(self, repo_path="cloned_repo"):
+        """
+        Extracts text content from files in a given repository path.
+        
+        Args:
+            repo_path (str): Path to the local repository
+            
+        Returns:
+            list: List of extracted text content from supported file types
+        """
+        try:
+            repo_docs = []
+            supported_extensions = (".py", ".md", ".txt", ".js", ".html", ".css")
+            
+            for root, _, files in os.walk(repo_path):
+                for file in files:
+                    if file.endswith(supported_extensions): 
+                        file_path = os.path.join(root, file)
+                        try:
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                repo_docs.append(f.read())
+                                self.logger.debug(f"Successfully read file: {file_path}")
+                        except Exception as e:
+                            self.logger.error(f"Error reading {file_path}: {e}")
+            
+            self.logger.info(f"Extracted text from {len(repo_docs)} files in {repo_path}")
+            return repo_docs
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting text from repository: {e}")
+            return []
