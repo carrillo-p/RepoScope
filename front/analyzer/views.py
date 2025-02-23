@@ -24,7 +24,8 @@ def home(request):
 def generate_pdf_report(analysis_results, briefing_name):
     """Generate a detailed PDF report of the analysis results"""
     try:
-        pdf_name = f"Informe_Análisis_{briefing_name}.pdf"
+        clean_name = briefing_name.lower().replace('.pdf', '')
+        pdf_name = f"Informe_Analisis_{clean_name}.pdf"
         pdf_path = os.path.join("static/reports", pdf_name)
         os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
 
@@ -32,72 +33,100 @@ def generate_pdf_report(analysis_results, briefing_name):
         
         # Title
         c.setFont("Helvetica", 16)
-        c.drawString(100, 800, "Informe detallado de cumplimiento del briefing")
+        c.drawString(100, 800, "Informe de Análisis por Niveles")
+        
+        # Project Type
+        c.setFont("Helvetica", 14)
+        project_type_map = {
+            'ml': 'Machine Learning',
+            'nlp': 'Procesamiento de Lenguaje Natural',
+            'genai': 'IA Generativa'
+        }
+        c.drawString(100, 770, f"Tipo de Proyecto: {project_type_map.get(analysis_results['project_type'], 'N/A')}")
         
         # Repository Statistics
         repo_stats = analysis_results['repository_stats']
+        y = 740
         c.setFont("Helvetica", 14)
-        c.drawString(100, 770, "1. Estadísticas del Repositorio")
+        c.drawString(100, y, "1. Estadísticas del Repositorio")
         c.setFont("Helvetica", 12)
-        y = 750
+        y -= 20
         
-        # Basic Stats
+        # Basic Stats and Languages
         c.drawString(120, y, f"Total Commits: {repo_stats['commit_count']}")
-        c.drawString(120, y-20, f"Total Branches: {len(repo_stats['branches'])}")
-        y -= 50
+        y -= 20
+        c.drawString(120, y, f"Lenguajes: {', '.join([f'{l['name']} ({l['percentage']}%)' for l in repo_stats['languages']])}")
+        y -= 40
 
-        # Contributors Section
+        # Tier Analysis
+        tier_analysis = analysis_results['tier_analysis']
         c.setFont("Helvetica", 14)
-        c.drawString(100, y, "2. Distribución de Commits por Desarrollador")
-        c.setFont("Helvetica", 12)
-        y -= 20
-        for contributor, count in repo_stats['contributors'].items():
-            c.drawString(120, y, f"{contributor}: {count} commits")
-            y -= 20
+        c.drawString(100, y, "2. Análisis por Niveles")
+        y -= 30
 
-        # Languages Section
-        y -= 20
-        c.setFont("Helvetica", 14)
-        c.drawString(100, y, "3. Lenguajes Utilizados")
-        c.setFont("Helvetica", 12)
-        y -= 20
-        for lang in repo_stats['languages']:
-            c.drawString(120, y, f"{lang['name']}: {lang['percentage']}%")
-            y -= 20
-
-        # Compliance Results
-        y -= 20
-        c.setFont("Helvetica", 14)
-        c.drawString(100, y, "4. Análisis de Cumplimiento")
-        c.setFont("Helvetica", 12)
-        y -= 20
-        
-        for result in analysis_results['compliance_results']:
-            status = "✅ Compliant" if result["compliant"] else "❌ Non-Compliant"
-            c.drawString(120, y, f"Section: {result['section'][:50]}...")
-            c.drawString(140, y - 20, f"Similarity: {result['similarity']}%")
-            c.drawString(140, y - 40, f"Status: {status}")
-            y -= 60
-
-        # LLM Analysis
-        if y < 100:  # New page if needed
-            c.showPage()
-            y = 750
-            c.setFont("Helvetica", 14)
-        
-        c.drawString(100, y, "5. Análisis Detallado (LLM)")
-        c.setFont("Helvetica", 12)
-        y -= 20
-        
-        # Split LLM analysis into lines and write
-        llm_analysis = analysis_results.get('llm_analysis', '').split('\n')
-        for line in llm_analysis:
-            if y < 50:  # New page if needed
+        for nivel in ['nivel_esencial', 'nivel_medio', 'nivel_avanzado', 'nivel_experto']:
+            if y < 100:  # New page if needed
                 c.showPage()
                 y = 750
-                c.setFont("Helvetica", 12)
-            c.drawString(120, y, line[:80])  # Limit line length
+            
+            nivel_data = tier_analysis['analisis_por_nivel'][nivel]
+            c.setFont("Helvetica", 13)
+            c.drawString(110, y, f"{nivel.replace('_', ' ').title()}")
+            c.setFont("Helvetica", 12)
             y -= 20
+            
+            c.drawString(120, y, f"Completitud: {nivel_data['porcentaje_completitud']}%")
+            y -= 20
+            
+            # Requirements met/unmet
+            if nivel_data['requisitos_cumplidos']:
+                c.drawString(120, y, "Requisitos Cumplidos:")
+                y -= 20
+                for req in nivel_data['requisitos_cumplidos']:
+                    c.drawString(130, y, f"✓ {req[:80]}")
+                    y -= 15
+            
+            if nivel_data['requisitos_faltantes']:
+                c.drawString(120, y, "Requisitos Faltantes:")
+                y -= 20
+                for req in nivel_data['requisitos_faltantes']:
+                    c.drawString(130, y, f"✗ {req[:80]}")
+                    y -= 15
+            
+            y -= 20
+
+        # Technical Analysis
+        if y < 200:
+            c.showPage()
+            y = 750
+            
+        c.setFont("Helvetica", 14)
+        c.drawString(100, y, "3. Análisis Técnico")
+        y -= 30
+        c.setFont("Helvetica", 12)
+        
+        tech_analysis = tier_analysis['analisis_tecnico']
+        for key, value in tech_analysis.items():
+            c.drawString(120, y, f"{key.replace('_', ' ').title()}: {value[:80]}")
+            y -= 20
+
+        # Recommendations
+        if y < 200:
+            c.showPage()
+            y = 750
+            
+        c.setFont("Helvetica", 14)
+        c.drawString(100, y, "4. Recomendaciones")
+        y -= 30
+        c.setFont("Helvetica", 12)
+        
+        for rec in tier_analysis['recomendaciones']:
+            c.drawString(120, y, f"• {rec[:80]}")
+            y -= 20
+
+        # Maturity Score
+        c.setFont("Helvetica", 14)
+        c.drawString(100, y-30, f"Puntuación de Madurez: {tier_analysis['puntuacion_madurez']}/100")
 
         c.save()
         return pdf_path
@@ -169,12 +198,12 @@ def analysis(request):
                         return response
 
                     return render(request, "analysis.html", {
+                        "project_type": analysis_results["project_type"],
                         "repo_data": analysis_results["repository_stats"],
-                        "compliance_results": analysis_results["compliance_results"],
-                        "llm_analysis": analysis_results["llm_analysis"],
+                        "tier_analysis": analysis_results["tier_analysis"],
                         "analysis_date": analysis_results["analysis_date"],
-                        "pdf_path": os.path.basename(pdf_path),
-                        "commit_analysis": analysis_results.get("commit_analysis", [])
+                        "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
+                        "analysis_available": bool(analysis_results.get("tier_analysis"))
                     })
 
                 except Exception as e:
@@ -192,4 +221,4 @@ def analysis(request):
                 elif os.path.isfile(file_path):
                     os.remove(file_path)
 
-    return render(request, "analysis.html")
+    return render(request, "analysis.html", {"analysis_available": False})
