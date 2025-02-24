@@ -224,7 +224,7 @@ def analysis(request):
                     briefing_path=briefing_path
                 )
 
-                if not analysis_results:
+                if not analysis_results or 'project_type' not in analysis_results:
                     raise ValueError(ANALYSIS_ERROR_MESSAGES['analysis_error'])
 
                 # Generar informe PDF
@@ -289,11 +289,13 @@ def analysis(request):
                 return render(request, "analysis.html", context)
 
             except json.JSONDecodeError as je:
-                logger.error(f"Error al parsear JSON de la API: {str(je)}")
-                messages.error(request, "Error en el procesamiento de la respuesta de la API")
+                logger.error(f"Error parsing JSON response: {je}")
+                messages.error(request, ANALYSIS_ERROR_MESSAGES['api_error'])
+                return render(request, "analysis.html")
             except ValueError as ve:
-                logger.error(f"Error de validación: {str(ve)}")
+                logger.error(f"Error de validación: {ve}")
                 messages.error(request, str(ve))
+                return render(request, "analysis.html")
             except Exception as e:
                 logger.error(f"Error inesperado: {str(e)}")
                 messages.error(request, "Ha ocurrido un error inesperado durante el análisis")

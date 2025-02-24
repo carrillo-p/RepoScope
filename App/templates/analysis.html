@@ -12,13 +12,20 @@
             {% csrf_token %}
             <div class="form-group">
                 <label for="repo_url">URL del Repositorio</label>
-                <input type="url" 
-                       class="form-control" 
-                       id="repo_url" 
-                       name="repo_url"
-                       placeholder="https://github.com/usuario/repositorio"
-                       required
-                       value="{{ request.POST.repo_url }}">
+                <div class="input-group">
+                    <input type="url" 
+                           class="form-control" 
+                           id="repo_url" 
+                           name="repo_url"
+                           placeholder="https://github.com/usuario/repositorio"
+                           required
+                           value="{{ request.POST.repo_url }}">
+                    <span class="input-group-text clear-input" 
+                          onclick="clearUrl()" 
+                          style="cursor: pointer;">
+                        ×
+                    </span>
+                </div>
                 <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
             
@@ -29,7 +36,7 @@
                        id="briefing" 
                        name="briefing"
                        accept=".pdf">
-                <small class="form-text">Opcional: Sube un archivo PDF con requisitos específicos</small>
+                <small class="form-text">Sube un archivo PDF con requisitos específicos</small>
             </div>
             
             <div class="text-center">
@@ -240,5 +247,14 @@ window.onload = function() {
         document.querySelector('form').reset();
     }
 }
+
+function clearUrl() {
+    document.getElementById('repo_url').value = '';
+    document.getElementById('repo_url').focus();
+}
 </script>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 {% endblock %} 

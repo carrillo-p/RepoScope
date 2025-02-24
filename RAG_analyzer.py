@@ -266,10 +266,10 @@ class GitHubRAGAnalyzer:
                 )
 
                 return {
-                    "project_type": self.project_type,
+                    "project_type": self.project_type or "other",
                     "repository_stats": repo_stats,
                     "tier_analysis": analysis,
-                    "analysis_date": str(datetime.now())
+                    "analysis_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
             except (requests.exceptions.RequestException, GroqAPIError) as api_error:
                 self.logger.error(f"Groq API error: {str(api_error)}")
