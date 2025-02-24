@@ -16,18 +16,6 @@
     <div class="repo-form">
         <h1 class="quick-analysis-title mb-4">Análisis Rápido de Repositorio</h1>
         
-        <!-- Mejorar sección de mensajes -->
-        {% if messages %}
-        <div class="messages mb-4">
-            {% for message in messages %}
-            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}danger{% endif %} alert-dismissible fade show" role="alert">
-                {{ message }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        
         <form method="POST" action="{% url 'quick_analysis' %}" onsubmit="showLoader()">
             {% csrf_token %}
             <div class="form-group">
@@ -52,7 +40,7 @@
                 </div>
 
                 <!-- Animación y mensaje de error -->
-                {% if messages %}
+                {% if messages and not graphs %}
                 <div class="error-animation mt-3">
                     <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
                     {% for message in messages %}
@@ -157,7 +145,23 @@
 <!-- Actualizar JavaScript para mostrar la animación -->
 <script>
 function showLoader() {
+    // Ocultar mensaje de error si existe
+    const errorDiv = document.querySelector('.error-animation');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    // Mostrar animación de carga
     document.getElementById('duck-animation').style.display = 'block';
+}
+
+// Si hay gráficos, ocultar mensajes de error
+window.onload = function() {
+    if (document.querySelector('.analysis-results')) {
+        const errorDiv = document.querySelector('.error-animation');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+    }
 }
 </script>
 {% endblock %} 

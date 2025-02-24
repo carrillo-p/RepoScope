@@ -17,7 +17,8 @@
                        id="repo_url" 
                        name="repo_url"
                        placeholder="https://github.com/usuario/repositorio"
-                       required>
+                       required
+                       value="{{ request.POST.repo_url }}">
                 <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
             
@@ -41,7 +42,7 @@
                 </div>
 
                 <!-- Animación y mensaje de error -->
-                {% if messages %}
+                {% if messages and not analysis_available %}
                 <div class="error-animation mt-3">
                     <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
                     {% for message in messages %}
@@ -54,18 +55,6 @@
             </div>
         </form>
     </div>
-
-    <!-- Añadir sección de mensajes de error -->
-    {% if messages %}
-    <div class="messages mt-3">
-        {% for message in messages %}
-        <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}danger{% endif %} alert-dismissible fade show" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
 
     <!-- Sección de resultados -->
     <div class="results-section" id="results">
@@ -227,10 +216,29 @@
     </div>
 </div>
 
-<!-- Añadir JavaScript para la animación -->
+<!-- Script para manejar las animaciones -->
 <script>
 function showLoader() {
-    document.getElementById('duck-animation').style.display = 'block';
+    const form = document.querySelector('form');
+    if (form.checkValidity()) {
+        // Ocultar mensaje de error si existe
+        const errorDiv = document.querySelector('.error-animation');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+        // Mostrar animación de carga
+        document.getElementById('duck-animation').style.display = 'block';
+    }
+}
+
+// Solo resetear formulario cuando el análisis sea exitoso
+window.onload = function() {
+    // Verificar si tenemos resultados exitosos
+    const hasSuccessfulAnalysis = document.querySelector('.analysis-content');
+    if (hasSuccessfulAnalysis) {
+        // Resetear el formulario solo si el análisis fue exitoso
+        document.querySelector('form').reset();
+    }
 }
 </script>
 {% endblock %} 

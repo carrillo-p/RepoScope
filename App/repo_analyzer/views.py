@@ -8,6 +8,12 @@ import json
 import sys
 import os
 import logging
+from .constants import (
+    QUICK_ANALYSIS_ERROR_MESSAGES, 
+    VISUALIZATION_CONFIG,
+    MAIN_LIBRARIES,
+    ANALYSIS_SETTINGS
+)
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(root_dir)
 from github_getter import GitHubAnalyzer
