@@ -1,0 +1,29 @@
+# Web Framework
+Django>=5.1.6
+asgiref==3.8.1
+
+# PDF Processing
+PyMuPDF==1.25.3
+reportlab==4.3.1
+
+# GitHub API Interaction 
+PyGithub>=2.6.0
+
+# Data Analysis and Visualization
+pandas>=2.2.3
+plotly==5.18.0
+seaborn==0.13.2
+
+# File Handling and HTTP Requests
+python-dotenv>=1.0.1
+requests>=2.32.3
+
+# LLM and Machine Learning
+langchain-groq==0.2.4
+langchain-huggingface==0.1.2
+scikit-learn==1.6.1
+
+# Utilities
+logging==0.4.9
+matplotlib>=3.7.1
+tenacity>=8.0.0

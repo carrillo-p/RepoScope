@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Archivos que se crean en el directorio
+cloned_repo/
+github_stats/
+reports/
