@@ -25,8 +25,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
 from reportlab.lib.colors import Color
 import json
+from .constants import ANALYSIS_ERROR_MESSAGES, PROJECT_TYPES, ANALYSIS_CONFIG
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     """Vista para renderizar la página principal"""
@@ -191,36 +194,38 @@ def analysis(request):
 
         # Validación de entrada
         if not repo_url:
-            messages.error(request, "Por favor, proporciona una URL del repositorio")
+            messages.error(request, ANALYSIS_ERROR_MESSAGES['url_invalid'])
+            return render(request, "analysis.html")
+
+        if not briefing_file:
+            messages.error(request, ANALYSIS_ERROR_MESSAGES['briefing_required'])
             return render(request, "analysis.html")
 
         try:
             analyzer = GitHubRAGAnalyzer()
             
-            if briefing_file:
-                try:
-                    # Guardar archivo de briefing
-                    briefing_filename = default_storage.save(
-                        f"briefings/{briefing_file.name}", 
-                        ContentFile(briefing_file.read())
-                    )
-                    briefing_path = default_storage.path(briefing_filename)
-                    temp_files.append(briefing_path)
-                    
-                    # Realizar análisis completo
-                    analysis_results = analyzer.analyze_requirements_completion(
-                        repo_url=repo_url,
-                        briefing_path=briefing_path
-                    )
-                    
-                    if not analysis_results:
-                        raise ValueError("No se obtuvieron resultados del análisis")
-                    
-                    if "error" in analysis_results:
-                        raise ValueError(analysis_results["error"])
-                    
-                    if "tier_analysis" not in analysis_results:
-                        raise ValueError("Análisis por niveles no disponible en los resultados")
+            # Guardar archivo de briefing
+            try:
+                briefing_filename = default_storage.save(
+                    f"briefings/{briefing_file.name}", 
+                    ContentFile(briefing_file.read())
+                )
+                briefing_path = default_storage.path(briefing_filename)
+                temp_files.append(briefing_path)
+            except Exception as e:
+                logger.error(f"Error al procesar el archivo briefing: {e}")
+                messages.error(request, ANALYSIS_ERROR_MESSAGES['file_processing_error'])
+                return render(request, "analysis.html")
+
+            # Realizar análisis
+            try:
+                analysis_results = analyzer.analyze_requirements_completion(
+                    repo_url=repo_url,
+                    briefing_path=briefing_path
+                )
+
+                if not analysis_results:
+                    raise ValueError(ANALYSIS_ERROR_MESSAGES['analysis_error'])
 
                     # Generar informe PDF
                     clean_name = briefing_file.name.lower().replace('.pdf', '')
@@ -246,11 +251,44 @@ def analysis(request):
                             else:
                                 messages.error(request, "PDF file not found")
 
-                    # Añadir repo clonado a la lista de limpieza
-                    cloned_repo_path = os.path.join(root_dir, "cloned_repo")
-                    if os.path.exists(cloned_repo_path):
-                        temp_files.append(cloned_repo_path)
+                # Añadir repo clonado a la lista de limpieza
+                cloned_repo_path = os.path.join(root_dir, "cloned_repo")
+                if os.path.exists(cloned_repo_path):
+                    temp_files.append(cloned_repo_path)
 
+                # Gestión de descarga del PDF
+                if request.POST.get('download_pdf'):
+                    response = FileResponse(
+                        open(pdf_path, 'rb'),
+                        as_attachment=True,
+                        filename=os.path.basename(pdf_path)
+                    )
+                    # Limpieza de archivos temporales antes de retornar
+                    for file_path in temp_files:
+                        try:
+                            if os.path.isdir(file_path):
+                                shutil.rmtree(file_path, ignore_errors=True)
+                            elif os.path.isfile(file_path):
+                                os.remove(file_path)
+                        except Exception as e:
+                            logger.error(f"Error al limpiar archivo temporal {file_path}: {e}")
+                    return response
+
+                # Preparar contexto para la plantilla
+                context = {
+                    "project_type": PROJECT_TYPES.get(
+                        analysis_results["project_type"], 
+                        PROJECT_TYPES['other']
+                    ),
+                    "repo_data": analysis_results["repository_stats"],
+                    "tier_analysis": analysis_results["tier_analysis"],
+                    "analysis_date": analysis_results["analysis_date"],
+                    "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
+                    "analysis_available": True,
+                    "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", [])
+                }
+
+                return render(request, "analysis.html", context)
                     return render(request, "analysis.html", {
                         "project_type": analysis_results["project_type"],
                         "repo_data": analysis_results["repository_stats"],

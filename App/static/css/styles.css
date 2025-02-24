@@ -656,4 +656,68 @@ body {
     font-size: 1.2rem;
     margin-top: 1rem;
     font-weight: 500;
+}
+
+/* Error Animation Styles */
+.error-animation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-top: 2rem;
+}
+
+.error-animation img {
+    width: 150px;
+    height: auto;
+    margin-bottom: 1rem;
+    animation: shake 0.5s ease-in-out;
+}
+
+.error-animation .alert {
+    width: 100%;
+    max-width: 400px;
+    text-align: center;
+    margin-bottom: 0.5rem;
+    background-color: #fff;
+    border: 2px solid var(--primary-red);
+    color: var(--primary-red);
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Animación de shake para el GIF de error */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+/* Ocultar mensajes de error duplicados */
+.messages:not(:first-of-type) {
+    display: none;
+}
+
+/* Ajuste para el contenedor de mensajes */
+.messages {
+    margin: 1rem auto;
+    max-width: 500px;
+}
+
+/* Estilo para cuando coexisten ambas animaciones */
+#duck-animation:not(:only-child) {
+    margin-bottom: 2rem;
+}
+
+/* Responsive adjustments for error messages */
+@media (max-width: 768px) {
+    .error-animation img {
+        width: 120px;
+    }
+    
+    .error-animation .alert {
+        max-width: 100%;
+        margin: 0.5rem 1rem;
+    }
 } 
