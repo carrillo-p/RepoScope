@@ -215,9 +215,11 @@
 
 
         <!-- Download PDF Button -->
-        {% if pdf_path %}
+        {% if analysis_available %}
         <div class="text-center mt-4">
-            <a href="/{{ pdf_path }}" class="btn btn-primary" download>
+            <a href="{% static 'reports/'|add:pdf_filename %}" 
+               class="btn btn-primary" 
+               download>
                 <i class="fas fa-download"></i> Descargar Informe en PDF
             </a>
         </div>

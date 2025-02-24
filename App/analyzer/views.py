@@ -17,7 +17,7 @@ import shutil
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-from Github_getter import GitHubAnalyzer  # Asegúrate de tener la ruta correcta
+from github_getter import GitHubAnalyzer  # Asegúrate de tener la ruta correcta
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import inch, cm
@@ -227,14 +227,29 @@ def analysis(request):
                 if not analysis_results:
                     raise ValueError(ANALYSIS_ERROR_MESSAGES['analysis_error'])
 
-                # Generar informe PDF
-                pdf_path = generate_pdf_report(
-                    analysis_results=analysis_results,
-                    briefing_name=briefing_file.name
-                )
+                    # Generar informe PDF
+                    clean_name = briefing_file.name.lower().replace('.pdf', '')
+                    pdf_name = f"Informe_Analisis_{clean_name}.pdf"
 
-                if not pdf_path:
-                    raise ValueError(ANALYSIS_ERROR_MESSAGES['pdf_generation_error'])
+                    if request.POST.get('download_pdf'):
+                        pdf_path = generate_pdf_report(
+                            analysis_results=analysis_results,
+                            briefing_name=briefing_file.name
+                        )
+                    
+                        if pdf_path:
+                            if os.path.exists(pdf_path):
+                                try:
+                                    return FileResponse(
+                                        open(pdf_path, 'rb'),
+                                        content_type='application/pdf',
+                                        as_attachment=True,
+                                        filename=os.path.basename(pdf_path)
+                                    )
+                                except Exception as e:
+                                    messages.error(request, f"Error downloading PDF: {str(e)}")
+                            else:
+                                messages.error(request, "PDF file not found")
 
                 # Añadir repo clonado a la lista de limpieza
                 cloned_repo_path = os.path.join(root_dir, "cloned_repo")
@@ -274,27 +289,41 @@ def analysis(request):
                 }
 
                 return render(request, "analysis.html", context)
+                    return render(request, "analysis.html", {
+                        "project_type": analysis_results["project_type"],
+                        "repo_data": analysis_results["repository_stats"],
+                        "tier_analysis": analysis_results["tier_analysis"],
+                        "analysis_date": analysis_results["analysis_date"],
+                        "analysis_available": bool(analysis_results.get("tier_analysis")),
+                        "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", []),
+                        "pdf_filename": pdf_name  # Add this line for dynamic PDF filename
+                    })
 
-            except Exception as e:
-                logger.error(f"Error en el análisis: {e}")
-                messages.error(request, ANALYSIS_ERROR_MESSAGES['analysis_error'])
-                return render(request, "analysis.html")
-
-        except Exception as e:
-            logger.error(f"Error general: {e}")
-            messages.error(request, ANALYSIS_ERROR_MESSAGES['general_error'])
-            return render(request, "analysis.html")
-
-        finally:
-            # Limpieza de archivos temporales
-            for file_path in temp_files:
-                try:
-                    if os.path.isdir(file_path):
-                        shutil.rmtree(file_path, ignore_errors=True)
-                    elif os.path.isfile(file_path):
-                        os.remove(file_path)
+                except json.JSONDecodeError as je:
+                    logging.error(f"Error al parsear JSON de la API: {str(je)}")
+                    messages.error(request, "Error en el procesamiento de la respuesta de la API")
+                except ValueError as ve:
+                    logging.error(f"Error de validación: {str(ve)}")
+                    messages.error(request, str(ve))
                 except Exception as e:
-                    logger.error(f"Error al limpiar archivo temporal {file_path}: {e}")
+                    logging.error(f"Error inesperado: {str(e)}")
+                    messages.error(request, "Ha ocurrido un error inesperado durante el análisis")
+                finally:
+                    # Limpieza de archivos temporales
+                    for file_path in temp_files:
+                        try:
+                            if os.path.isdir(file_path):
+                                shutil.rmtree(file_path, ignore_errors=True)
+                            elif os.path.isfile(file_path):
+                                os.remove(file_path)
+                        except Exception as e:
+                            logging.error(f"Error al limpiar archivo temporal {file_path}: {str(e)}")
+            else:
+                messages.error(request, "Por favor, proporciona un archivo briefing")
+                
+        except Exception as e:
+            logging.error(f"Error en el análisis del repositorio: {str(e)}")
+            messages.error(request, f"Error al analizar el repositorio: {str(e)}")
 
     return render(request, "analysis.html", {"analysis_available": False})
 
