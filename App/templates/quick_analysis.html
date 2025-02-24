@@ -16,11 +16,13 @@
     <div class="repo-form">
         <h1 class="quick-analysis-title mb-4">Análisis Rápido de Repositorio</h1>
         
+        <!-- Mejorar sección de mensajes -->
         {% if messages %}
         <div class="messages mb-4">
             {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}">
+            <div class="alert alert-{% if message.tags %}{{ message.tags }}{% else %}danger{% endif %} alert-dismissible fade show" role="alert">
                 {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
             {% endfor %}
         </div>
@@ -42,11 +44,24 @@
             
             <div class="text-center">
                 <button type="submit" class="btn btn-primary">Analizar</button>
-                <!-- Animación del pato -->
+                
+                <!-- Animación de carga -->
                 <div id="duck-animation" style="display: none;">
                     <img src="{% static 'images/XOsX.gif' %}" alt="" width="150" class="mt-4">
                     <p class="mt-2">Analizando repositorio...</p>
                 </div>
+
+                <!-- Animación y mensaje de error -->
+                {% if messages %}
+                <div class="error-animation mt-3">
+                    <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
+                    {% for message in messages %}
+                    <div class="alert alert-danger mt-2">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </form>
     </div>
