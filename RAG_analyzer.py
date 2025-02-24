@@ -3,6 +3,9 @@ import os
 from typing import List, Dict, Any
 from langchain_groq import ChatGroq
 from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema import OutputParserException
+from langchain.schema.runnable import RunnableConfig
+import requests.exceptions
 from dotenv import load_dotenv
 import logging
 from github_getter import GitHubAnalyzer
@@ -10,9 +13,14 @@ from briefing_analyzer import ComplianceAnalyzer
 import json
 from tenacity import retry, stop_after_attempt, wait_exponential
 import sys
+from typing import Any
 
 root_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(root_dir)
+
+class GroqAPIError(Exception):
+    """Custom exception for Groq API errors"""
+    pass
 
 class GitHubRAGAnalyzer:
     """
@@ -45,7 +53,7 @@ class GitHubRAGAnalyzer:
         self.initialize_groq()
         self.setup_prompts()
         self.project_type = None  # Se establecerá durante el análisis
-
+    
     def setup_logging(self):
         """Configuración del sistema de logging para seguimiento y depuración"""
         logging.basicConfig(
@@ -56,10 +64,99 @@ class GitHubRAGAnalyzer:
 
     def initialize_groq(self):
         """Inicialización del modelo de lenguaje Groq"""
-        self.llm = ChatGroq(
-            api_key=self.api_key,
-            model_name=self.model_name
-        )
+        try:
+            self.llm = ChatGroq(
+                api_key=self.api_key,
+                model_name=self.model_name
+            )
+        except Exception as e:
+            self.logger.error(f"Error initializing Groq model: {e}")
+            raise GroqAPIError("Failed to initialize Groq API")
+        
+    def _clean_json_string(self, text: str) -> str:
+        """
+        Limpia y valida una cadena JSON
+        Args:
+            text: Texto que contiene JSON para limpiar
+        Returns:
+            str: JSON limpio y válido
+        """
+        try:
+            # Encuentra el primer '{' y último '}'
+            start = text.find('{')
+            end = text.rfind('}') + 1
+            if start == -1 or end == 0:
+                raise ValueError("No JSON object found in response")
+                
+            json_str = text[start:end]
+            
+            # Limpia caracteres especiales y escapes inválidos
+            json_str = json_str.replace('\\n', ' ')
+            json_str = json_str.replace('\\', '\\\\')
+            json_str = json_str.replace('\\"', '"')
+            
+            # Intenta parsear para validar
+            json.loads(json_str)
+            return json_str
+            
+        except Exception as e:
+            self.logger.error(f"Error cleaning JSON string: {e}")
+            raise ValueError(f"Invalid JSON format: {e}")
+        
+    def _parse_llm_response(self, response: Any) -> Dict:
+        """
+        Parsea y valida la respuesta del LLM
+        Args:
+            response: Respuesta del modelo
+        Returns:
+            Dict: JSON parseado y validado
+        """
+        try:
+            if not hasattr(response, 'content'):
+                raise ValueError("Invalid response format from LLM")
+                
+            response_text = response.content.strip()
+            cleaned_json = self._clean_json_string(response_text)
+            
+            return json.loads(cleaned_json)
+            
+        except json.JSONDecodeError as je:
+            self.logger.error(f"JSON decode error: {je}")
+            self.logger.debug(f"Raw response: {response_text}")
+            raise GroqAPIError(f"Error parsing LLM response: {je}")
+        
+    def _get_error_response(self, error_message: str) -> Dict[str, Any]:
+        """
+        Genera una respuesta de error consistente
+        Args:
+            error_message: Mensaje de error
+        Returns:
+            Dict: Estructura de error estándar
+        """
+        return {
+            "error": error_message,
+            "error_type": "analysis_error",
+            "analysis_date": str(datetime.now()),
+            "evaluacion_general": "Error en el análisis",
+            "analisis_por_nivel": {
+                nivel: {
+                    "requisitos_cumplidos": [],
+                    "requisitos_faltantes": [],
+                    "calidad_implementacion": "Error en análisis",
+                    "porcentaje_completitud": 0,
+                    "aspectos_destacados": [],
+                    "areas_mejora": []
+                } for nivel in ["nivel_esencial", "nivel_medio", "nivel_avanzado", "nivel_experto"]
+            },
+            "analisis_tecnico": {
+                campo: "Error en análisis" for campo in [
+                    "calidad_codigo", "mejores_practicas", "experimentacion",
+                    "manejo_datos", "optimizacion", "etica_sesgos"
+                ]
+            },
+            "recomendaciones": ["Error al generar recomendaciones"],
+            "puntuacion_madurez": 0
+        }
 
     def detect_project_type(self, briefing_text: str) -> str:
         """
@@ -148,31 +245,39 @@ class GitHubRAGAnalyzer:
             repo_stats = self.github_analyzer.get_repo_stats(repo_url)
             
             # Extracción del briefing y detección del tipo de proyecto
-            briefing_text = self.compliance_analyzer.extract_text_from_pdf(briefing_path)
-            if not briefing_text:
-                raise ValueError("Failed to extract briefing text")
+            try:
+                briefing_text = self.compliance_analyzer.extract_text_from_pdf(briefing_path)
+                if not briefing_text:
+                    raise ValueError("Failed to extract briefing text")
 
-            self.project_type = self.detect_project_type(briefing_text)
-            self.logger.info(f"Detected project type: {self.project_type}")
-            
-            # Análisis de requisitos y generación de resultados
-            tier_requirements = self.extract_tier_requirements(briefing_text)
-            
-            if not tier_requirements:
-                raise ValueError("Failed to extract tier requirements")
+                self.project_type = self.detect_project_type(briefing_text)
+                self.logger.info(f"Detected project type: {self.project_type}")
                 
-            analysis = self._generate_tier_analysis(
-                tier_requirements=tier_requirements,
-                repo_docs=repo_docs,
-                repo_stats=repo_stats
-            )
+                # Análisis de requisitos y generación de resultados
+                tier_requirements = self.extract_tier_requirements(briefing_text)
+                
+                if not tier_requirements:
+                    raise ValueError("Failed to extract tier requirements")
+                    
+                analysis = self._generate_tier_analysis(
+                    tier_requirements=tier_requirements,
+                    repo_docs=repo_docs,
+                    repo_stats=repo_stats
+                )
 
-            return {
-                "project_type": self.project_type,
-                "repository_stats": repo_stats,
-                "tier_analysis": analysis,
-                "analysis_date": str(datetime.now())
-            }
+                return {
+                    "project_type": self.project_type,
+                    "repository_stats": repo_stats,
+                    "tier_analysis": analysis,
+                    "analysis_date": str(datetime.now())
+                }
+            except (requests.exceptions.RequestException, GroqAPIError) as api_error:
+                self.logger.error(f"Groq API error: {str(api_error)}")
+                return {
+                    "error": "Lo sentimos, la API de Groq no está disponible en este momento. Por favor, inténtelo más tarde.",
+                    "details": str(api_error),
+                    "analysis_date": str(datetime.now())
+                }
 
         except Exception as e:
             self.logger.error(f"Error in requirements analysis: {e}")
@@ -260,7 +365,15 @@ class GitHubRAGAnalyzer:
             self.logger.error(f"Error extracting tier requirements: {e}")
             return {}
         
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=30))
+    @retry(
+        stop=stop_after_attempt(2),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
+        retry=lambda e: isinstance(e, (requests.exceptions.RequestException, GroqAPIError)),
+        retry_error_callback=lambda _: {
+            "error": "Lo sentimos, la API de Groq no está disponible en este momento.",
+            "analysis_date": str(datetime.now())
+        }
+    )
     def _generate_tier_analysis(
         self,
         tier_requirements: Dict[str, List[str]],

@@ -223,54 +223,44 @@ def analysis(request):
                         raise ValueError("Análisis por niveles no disponible en los resultados")
 
                     # Generar informe PDF
-                    pdf_path = generate_pdf_report(
-                        analysis_results=analysis_results,
-                        briefing_name=briefing_file.name
-                    )
+                    clean_name = briefing_file.name.lower().replace('.pdf', '')
+                    pdf_name = f"Informe_Analisis_{clean_name}.pdf"
+
+                    if request.POST.get('download_pdf'):
+                        pdf_path = generate_pdf_report(
+                            analysis_results=analysis_results,
+                            briefing_name=briefing_file.name
+                        )
                     
-                    if not pdf_path:
-                        raise ValueError("Error al generar el informe PDF")
+                        if pdf_path:
+                            if os.path.exists(pdf_path):
+                                try:
+                                    return FileResponse(
+                                        open(pdf_path, 'rb'),
+                                        content_type='application/pdf',
+                                        as_attachment=True,
+                                        filename=os.path.basename(pdf_path)
+                                    )
+                                except Exception as e:
+                                    messages.error(request, f"Error downloading PDF: {str(e)}")
+                            else:
+                                messages.error(request, "PDF file not found")
 
                     # Añadir repo clonado a la lista de limpieza
                     cloned_repo_path = os.path.join(root_dir, "cloned_repo")
                     if os.path.exists(cloned_repo_path):
                         temp_files.append(cloned_repo_path)
 
-                    try:
-                        # Gestión de descarga del PDF
-                        response = None
-                        if request.POST.get('download_pdf'):
-                            response = FileResponse(
-                                open(pdf_path, 'rb'),
-                                as_attachment=True,
-                                filename=os.path.basename(pdf_path)
-                            )
-                        
-                        # Limpieza de archivos temporales
-                        for file_path in temp_files:
-                            if os.path.isdir(file_path):
-                                shutil.rmtree(file_path, ignore_errors=True)
-                            elif os.path.isfile(file_path):
-                                os.remove(file_path)
-                        
-                        # Retornar respuesta de descarga si es necesario
-                        if response:
-                            return response
+                    return render(request, "analysis.html", {
+                        "project_type": analysis_results["project_type"],
+                        "repo_data": analysis_results["repository_stats"],
+                        "tier_analysis": analysis_results["tier_analysis"],
+                        "analysis_date": analysis_results["analysis_date"],
+                        "analysis_available": bool(analysis_results.get("tier_analysis")),
+                        "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", []),
+                        "pdf_filename": pdf_name  # Add this line for dynamic PDF filename
+                    })
 
-                        # Renderizar template con resultados
-                        return render(request, "analysis.html", {
-                            "project_type": analysis_results["project_type"],
-                            "repo_data": analysis_results["repository_stats"],
-                            "tier_analysis": analysis_results["tier_analysis"],
-                            "analysis_date": analysis_results["analysis_date"],
-                            "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
-                            "analysis_available": bool(analysis_results.get("tier_analysis")),
-                            "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", [])
-                        })
-
-                    except Exception as e:
-                        logging.error(f"Error serving PDF or cleaning up: {e}")
-                        messages.error(request, "Error downloading PDF file")
                 except json.JSONDecodeError as je:
                     logging.error(f"Error al parsear JSON de la API: {str(je)}")
                     messages.error(request, "Error en el procesamiento de la respuesta de la API")
