@@ -174,3 +174,12 @@ cython_debug/
 cloned_repo/
 github_stats/
 reports/
+
+# Añadir estas líneas
+.env
+*.pyc
+__pycache__/
+db.sqlite3
+staticfiles/
+media/
+.DS_Store

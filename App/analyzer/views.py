@@ -25,8 +25,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_JUSTIFY, TA_LEFT
 from reportlab.lib.colors import Color
 import json
+from .constants import ANALYSIS_ERROR_MESSAGES, PROJECT_TYPES, ANALYSIS_CONFIG
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 def home(request):
     """Vista para renderizar la página principal"""
@@ -191,101 +194,126 @@ def analysis(request):
 
         # Validación de entrada
         if not repo_url:
-            messages.error(request, "Por favor, proporciona una URL del repositorio")
+            messages.error(request, ANALYSIS_ERROR_MESSAGES['url_invalid'])
+            return render(request, "analysis.html")
+
+        if not briefing_file:
+            messages.error(request, ANALYSIS_ERROR_MESSAGES['briefing_required'])
             return render(request, "analysis.html")
 
         try:
             analyzer = GitHubRAGAnalyzer()
             
-            if briefing_file:
-                try:
-                    # Guardar archivo de briefing
-                    briefing_filename = default_storage.save(
-                        f"briefings/{briefing_file.name}", 
-                        ContentFile(briefing_file.read())
-                    )
-                    briefing_path = default_storage.path(briefing_filename)
-                    temp_files.append(briefing_path)
-                    
-                    # Realizar análisis completo
-                    analysis_results = analyzer.analyze_requirements_completion(
-                        repo_url=repo_url,
-                        briefing_path=briefing_path
-                    )
-                    
-                    if not analysis_results:
-                        raise ValueError("No se obtuvieron resultados del análisis")
-                    
-                    if "error" in analysis_results:
-                        raise ValueError(analysis_results["error"])
-                    
-                    if "tier_analysis" not in analysis_results:
-                        raise ValueError("Análisis por niveles no disponible en los resultados")
+            # Guardar archivo de briefing
+            try:
+                briefing_filename = default_storage.save(
+                    f"briefings/{briefing_file.name}", 
+                    ContentFile(briefing_file.read())
+                )
+                briefing_path = default_storage.path(briefing_filename)
+                temp_files.append(briefing_path)
+            except Exception as e:
+                logger.error(f"Error al procesar el archivo briefing: {e}")
+                messages.error(request, ANALYSIS_ERROR_MESSAGES['file_processing_error'])
+                return render(request, "analysis.html")
 
-                    # Generar informe PDF
-                    clean_name = briefing_file.name.lower().replace('.pdf', '')
-                    pdf_name = f"Informe_Analisis_{clean_name}.pdf"
+            # Realizar análisis
+            try:
+                analysis_results = analyzer.analyze_requirements_completion(
+                    repo_url=repo_url,
+                    briefing_path=briefing_path
+                )
 
-                    if request.POST.get('download_pdf'):
-                        pdf_path = generate_pdf_report(
-                            analysis_results=analysis_results,
-                            briefing_name=briefing_file.name
-                        )
-                    
-                        if pdf_path:
-                            if os.path.exists(pdf_path):
-                                try:
-                                    return FileResponse(
-                                        open(pdf_path, 'rb'),
-                                        content_type='application/pdf',
-                                        as_attachment=True,
-                                        filename=os.path.basename(pdf_path)
-                                    )
-                                except Exception as e:
-                                    messages.error(request, f"Error downloading PDF: {str(e)}")
-                            else:
-                                messages.error(request, "PDF file not found")
+                if not analysis_results or 'project_type' not in analysis_results:
+                    raise ValueError(ANALYSIS_ERROR_MESSAGES['analysis_error'])
 
-                    # Añadir repo clonado a la lista de limpieza
-                    cloned_repo_path = os.path.join(root_dir, "cloned_repo")
-                    if os.path.exists(cloned_repo_path):
-                        temp_files.append(cloned_repo_path)
-
-                    return render(request, "analysis.html", {
-                        "project_type": analysis_results["project_type"],
-                        "repo_data": analysis_results["repository_stats"],
-                        "tier_analysis": analysis_results["tier_analysis"],
-                        "analysis_date": analysis_results["analysis_date"],
-                        "analysis_available": bool(analysis_results.get("tier_analysis")),
-                        "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", []),
-                        "pdf_filename": pdf_name  # Add this line for dynamic PDF filename
-                    })
-
-                except json.JSONDecodeError as je:
-                    logging.error(f"Error al parsear JSON de la API: {str(je)}")
-                    messages.error(request, "Error en el procesamiento de la respuesta de la API")
-                except ValueError as ve:
-                    logging.error(f"Error de validación: {str(ve)}")
-                    messages.error(request, str(ve))
-                except Exception as e:
-                    logging.error(f"Error inesperado: {str(e)}")
-                    messages.error(request, "Ha ocurrido un error inesperado durante el análisis")
-                finally:
-                    # Limpieza de archivos temporales
-                    for file_path in temp_files:
-                        try:
-                            if os.path.isdir(file_path):
-                                shutil.rmtree(file_path, ignore_errors=True)
-                            elif os.path.isfile(file_path):
-                                os.remove(file_path)
-                        except Exception as e:
-                            logging.error(f"Error al limpiar archivo temporal {file_path}: {str(e)}")
-            else:
-                messages.error(request, "Por favor, proporciona un archivo briefing")
+                # Generar informe PDF
+                clean_name = briefing_file.name.lower().replace('.pdf', '')
+                pdf_name = f"Informe_Analisis_{clean_name}.pdf"
                 
+                pdf_path = generate_pdf_report(
+                    analysis_results=analysis_results,
+                    briefing_name=briefing_file.name
+                )
+
+                if not pdf_path:
+                    raise ValueError(ANALYSIS_ERROR_MESSAGES['pdf_generation_error'])
+
+                # Añadir repo clonado a la lista de limpieza
+                cloned_repo_path = os.path.join(root_dir, "cloned_repo")
+                if os.path.exists(cloned_repo_path):
+                    temp_files.append(cloned_repo_path)
+
+                # Gestión de descarga del PDF
+                if request.POST.get('download_pdf'):
+                    if os.path.exists(pdf_path):
+                        try:
+                            response = FileResponse(
+                                open(pdf_path, 'rb'),
+                                content_type='application/pdf',
+                                as_attachment=True,
+                                filename=pdf_name  # Usamos el nombre formateado
+                            )
+                            # Limpieza antes de retornar
+                            for file_path in temp_files:
+                                try:
+                                    if os.path.isdir(file_path):
+                                        shutil.rmtree(file_path, ignore_errors=True)
+                                    elif os.path.isfile(file_path):
+                                        os.remove(file_path)
+                                except Exception as e:
+                                    logger.error(f"Error al limpiar archivo temporal {file_path}: {e}")
+                            return response
+                        except Exception as e:
+                            logger.error(f"Error al descargar PDF: {str(e)}")
+                            messages.error(request, ANALYSIS_ERROR_MESSAGES['pdf_generation_error'])
+                    else:
+                        logger.error("Archivo PDF no encontrado")
+                        messages.error(request, ANALYSIS_ERROR_MESSAGES['pdf_generation_error'])
+
+                # Preparar contexto para la plantilla
+                context = {
+                    "project_type": PROJECT_TYPES.get(
+                        analysis_results["project_type"], 
+                        PROJECT_TYPES['other']
+                    ),
+                    "repo_data": analysis_results["repository_stats"],
+                    "tier_analysis": analysis_results["tier_analysis"],
+                    "analysis_date": analysis_results["analysis_date"],
+                    "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
+                    "analysis_available": True,
+                    "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", []),
+                    "pdf_filename": pdf_name  # Usamos el nombre formateado
+                }
+
+                return render(request, "analysis.html", context)
+
+            except json.JSONDecodeError as je:
+                logger.error(f"Error parsing JSON response: {je}")
+                messages.error(request, ANALYSIS_ERROR_MESSAGES['api_error'])
+                return render(request, "analysis.html")
+            except ValueError as ve:
+                logger.error(f"Error de validación: {ve}")
+                messages.error(request, str(ve))
+                return render(request, "analysis.html")
+            except Exception as e:
+                logger.error(f"Error inesperado: {str(e)}")
+                messages.error(request, "Ha ocurrido un error inesperado durante el análisis")
+            finally:
+                # Limpieza de archivos temporales
+                for file_path in temp_files:
+                    try:
+                        if os.path.isdir(file_path):
+                            shutil.rmtree(file_path, ignore_errors=True)
+                        elif os.path.isfile(file_path):
+                            os.remove(file_path)
+                    except Exception as e:
+                        logger.error(f"Error al limpiar archivo temporal {file_path}: {str(e)}")
+
         except Exception as e:
-            logging.error(f"Error en el análisis del repositorio: {str(e)}")
+            logger.error(f"Error en el análisis del repositorio: {str(e)}")
             messages.error(request, f"Error al analizar el repositorio: {str(e)}")
+            return render(request, "analysis.html")
 
     return render(request, "analysis.html", {"analysis_available": False})
 

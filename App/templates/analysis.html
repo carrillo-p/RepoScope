@@ -12,12 +12,20 @@
             {% csrf_token %}
             <div class="form-group">
                 <label for="repo_url">URL del Repositorio</label>
-                <input type="url" 
-                       class="form-control" 
-                       id="repo_url" 
-                       name="repo_url"
-                       placeholder="https://github.com/usuario/repositorio"
-                       required>
+                <div class="input-group">
+                    <input type="url" 
+                           class="form-control" 
+                           id="repo_url" 
+                           name="repo_url"
+                           placeholder="https://github.com/usuario/repositorio"
+                           required
+                           value="{{ request.POST.repo_url }}">
+                    <span class="input-group-text clear-input" 
+                          onclick="clearUrl()" 
+                          style="cursor: pointer;">
+                        ×
+                    </span>
+                </div>
                 <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
             
@@ -28,16 +36,29 @@
                        id="briefing" 
                        name="briefing"
                        accept=".pdf">
-                <small class="form-text">Opcional: Sube un archivo PDF con requisitos específicos</small>
+                <small class="form-text">Sube un archivo PDF con requisitos específicos</small>
             </div>
             
             <div class="text-center">
                 <button type="submit" class="btn btn-primary">Analizar</button>
-                <!-- Animación del pato -->
+                
+                <!-- Animación de carga -->
                 <div id="duck-animation" style="display: none;">
                     <img src="{% static 'images/XOsX.gif' %}" alt="" width="150" class="mt-4">
                     <p class="mt-2">Analizando repositorio...</p>
                 </div>
+
+                <!-- Animación y mensaje de error -->
+                {% if messages and not analysis_available %}
+                <div class="error-animation mt-3">
+                    <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
+                    {% for message in messages %}
+                    <div class="alert alert-danger mt-2">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </form>
     </div>
@@ -202,10 +223,38 @@
     </div>
 </div>
 
-<!-- Añadir JavaScript para la animación -->
+<!-- Script para manejar las animaciones -->
 <script>
 function showLoader() {
-    document.getElementById('duck-animation').style.display = 'block';
+    const form = document.querySelector('form');
+    if (form.checkValidity()) {
+        // Ocultar mensaje de error si existe
+        const errorDiv = document.querySelector('.error-animation');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+        // Mostrar animación de carga
+        document.getElementById('duck-animation').style.display = 'block';
+    }
+}
+
+// Solo resetear formulario cuando el análisis sea exitoso
+window.onload = function() {
+    // Verificar si tenemos resultados exitosos
+    const hasSuccessfulAnalysis = document.querySelector('.analysis-content');
+    if (hasSuccessfulAnalysis) {
+        // Resetear el formulario solo si el análisis fue exitoso
+        document.querySelector('form').reset();
+    }
+}
+
+function clearUrl() {
+    document.getElementById('repo_url').value = '';
+    document.getElementById('repo_url').focus();
 }
 </script>
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
 {% endblock %} 

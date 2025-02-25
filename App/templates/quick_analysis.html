@@ -16,16 +16,6 @@
     <div class="repo-form">
         <h1 class="quick-analysis-title mb-4">Análisis Rápido de Repositorio</h1>
         
-        {% if messages %}
-        <div class="messages mb-4">
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags }}">
-                {{ message }}
-            </div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        
         <form method="POST" action="{% url 'quick_analysis' %}" onsubmit="showLoader()">
             {% csrf_token %}
             <div class="form-group">
@@ -42,11 +32,24 @@
             
             <div class="text-center">
                 <button type="submit" class="btn btn-primary">Analizar</button>
-                <!-- Animación del pato -->
+                
+                <!-- Animación de carga -->
                 <div id="duck-animation" style="display: none;">
                     <img src="{% static 'images/XOsX.gif' %}" alt="" width="150" class="mt-4">
                     <p class="mt-2">Analizando repositorio...</p>
                 </div>
+
+                <!-- Animación y mensaje de error -->
+                {% if messages and not graphs %}
+                <div class="error-animation mt-3">
+                    <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
+                    {% for message in messages %}
+                    <div class="alert alert-danger mt-2">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
             </div>
         </form>
     </div>
@@ -142,7 +145,23 @@
 <!-- Actualizar JavaScript para mostrar la animación -->
 <script>
 function showLoader() {
+    // Ocultar mensaje de error si existe
+    const errorDiv = document.querySelector('.error-animation');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+    }
+    // Mostrar animación de carga
     document.getElementById('duck-animation').style.display = 'block';
+}
+
+// Si hay gráficos, ocultar mensajes de error
+window.onload = function() {
+    if (document.querySelector('.analysis-results')) {
+        const errorDiv = document.querySelector('.error-animation');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+    }
 }
 </script>
 {% endblock %} 
