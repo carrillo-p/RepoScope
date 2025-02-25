@@ -156,6 +156,7 @@
                             <h3>Evaluación General</h3>
                             <p>{{ tier_analysis.evaluacion_general }}</p>
 
+                            {% comment %}
                             <!-- Level Analysis -->
                             {% for nivel, datos in tier_analysis.analisis_por_nivel.items %}
                             <div class="nivel-section mb-4">
@@ -199,6 +200,7 @@
                             <!-- Maturity Score -->
                             <h3>Puntuación de Madurez</h3>
                             <p>{{ tier_analysis.puntuacion_madurez }}/100</p>
+                            {% endcomment %}
                         </div>
                     {% else %}
                         <p class="text-muted">El informe no está disponible actualmente.</p>

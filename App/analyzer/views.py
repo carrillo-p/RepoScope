@@ -130,49 +130,9 @@ def generate_pdf_report(analysis_results, briefing_name):
         ))
         
         # Análisis por niveles
-        story.append(Paragraph("2. Análisis por Niveles", heading_style))
-        tier_analysis = analysis_results['tier_analysis']
-        
-        for nivel in ['nivel_esencial', 'nivel_medio', 'nivel_avanzado', 'nivel_experto']:
-            nivel_data = tier_analysis['analisis_por_nivel'][nivel]
-            story.append(Paragraph(nivel.replace('_', ' ').title(), heading_style))
-            story.append(Paragraph(
-                f"Completitud: {nivel_data['porcentaje_completitud']}%", 
-                normal_style
-            ))
-            
-            if nivel_data['requisitos_cumplidos']:
-                story.append(Paragraph("Requisitos Cumplidos:", normal_style))
-                for req in nivel_data['requisitos_cumplidos']:
-                    story.append(Paragraph(f"• {req}", bullet_style))
-            
-            if nivel_data['requisitos_faltantes']:
-                story.append(Paragraph("Requisitos Faltantes:", normal_style))
-                for req in nivel_data['requisitos_faltantes']:
-                    story.append(Paragraph(f"• {req}", bullet_style))
-            
-            story.append(Spacer(1, 12))
-
-        # Análisis técnico
-        story.append(Paragraph("3. Análisis Técnico", heading_style))
-        tech_analysis = tier_analysis['analisis_tecnico']
-        for key, value in tech_analysis.items():
-            story.append(Paragraph(
-                f"{key.replace('_', ' ').title()}: {value}", 
-                normal_style
-            ))
-        
-        # Recomendaciones
-        story.append(Paragraph("4. Recomendaciones", heading_style))
-        for rec in tier_analysis['recomendaciones']:
-            story.append(Paragraph(f"• {rec}", bullet_style))
-        
-        # Puntuación final
-        story.append(Spacer(1, 20))
-        story.append(Paragraph(
-            f"Puntuación de Madurez: {tier_analysis['puntuacion_madurez']}/100",
-            heading_style
-        ))
+        story.append(Paragraph("2. Análisis del Repositorio", heading_style))
+        analysis_text = analysis_results.get('tier_analysis', {}).get('evaluacion_general', 'No se generó análisis')
+        story.append(Paragraph(analysis_text, normal_style))
 
         # Construir el documento
         doc.build(story)
