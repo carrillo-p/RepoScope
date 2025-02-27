@@ -95,27 +95,84 @@ class GitHubAnalyzer:
             commit_count = 0
             contributors_data = {}
             commits_by_branch_author = []
+            detailed_commit_data = []
+            total_additions = 0
+            total_deletions = 0
+
+            processed_commits = set()
 
             # Análisis de commits por rama
             for branch in branches:
                 commits = repo.get_commits(sha=branch.name)
                 branch_commits = list(commits)
-                commit_count += len(branch_commits)
+                branch_unique_commits = 0
 
                 for commit in branch_commits:
+                    if commit.sha in processed_commits:
+                        continue
+
+                    # Ignorar commits de merge
+                    is_merge_commit = False
+                    if len(commit.parents) > 1:
+                        is_merge_commit = True
+
+                    elif any(pattern in commit.commit.message.lower() for pattern in [
+                        "merge pull request", "merge branch", "merge remote"
+                    ]):
+                        is_merge_commit = True
+
+                    if is_merge_commit:
+                        self.logger.debug(f"Skipping merge commit: {commit.sha[:7]} in branch {branch.name}")
+                        processed_commits.add(commit.sha)  # Mark as processed so we don't reprocess
+                        continue
+
+                    processed_commits.add(commit.sha)
+                    commit_count += 1
+                    branch_unique_commits += 1
+
                     author = commit.author.login if commit.author else "Unknown"
                     contributors_data[author] = contributors_data.get(author, 0) + 1
+
+                    additions = commit.stats.additions
+                    deletions = commit.stats.deletions
+                    total_additions += additions
+                    total_deletions += deletions
+
+                    # Commit message
+                    message = commit.commit.message
+                    # Eliminar saltos de línea y retornos para evitar problemas en CSV
+                    message = message.replace("\n", " ").replace('\r', '')
+
+                    commit_date = commit.commit.author.date.strftime("%Y-%m-%d %H:%M:%S")
                     
                     # Recolección de datos para CSV
                     commits_by_branch_author.append({
                         'Branch': branch.name,
                         'Author': author,
-                        'Commits': 1
+                        'Commits': 1,
+                        'Additions': additions,
+                        'Deletions': deletions,
+                        'CommitSHA': commit.sha
+                    })
+
+                    # Datos detallados de cada commit
+                    detailed_commit_data.append({
+                        'Branch': branch.name,
+                        'Author': author,
+                        'CommitSHA': commit.sha,
+                        'Message': message,
+                        'Additions': additions,
+                        'Deletions': deletions,
+                        'Date': commit_date
                     })
 
             # Crear DataFrame y agrupar por rama y autor
             df_commits = pd.DataFrame(commits_by_branch_author)
-            grouped_commits = df_commits.groupby(['Branch', 'Author'])['Commits'].sum().reset_index()
+            grouped_commits = df_commits.groupby(['Branch', 'Author']).agg({
+                'Commits': 'sum',
+                'Additions': 'sum',
+                'Deletions': 'sum'
+            }).reset_index()
             grouped_commits_list = grouped_commits.to_dict('records')
 
             # Guardar estadísticas en CSV
@@ -124,6 +181,12 @@ class GitHubAnalyzer:
             csv_path = os.path.join(output_dir, 'commits_by_branch_author.csv')
             grouped_commits.to_csv(csv_path, index=False)
             self.logger.info(f"Commit statistics saved to {csv_path}")
+
+            if detailed_commit_data:
+                df_detailed = pd.DataFrame(detailed_commit_data)
+                detailed_csv_path = os.path.join(output_dir, 'detailed_commits.csv')
+                df_detailed.to_csv(detailed_csv_path, index=False)
+                self.logger.info(f"Detailed commit information saved to {detailed_csv_path}")
 
             # Análisis de lenguajes de programación
             try:
@@ -172,7 +235,9 @@ class GitHubAnalyzer:
                 "commit_count": commit_count,
                 "contributors": contributors_data,
                 "languages": languages_data,
-                "commit_analysis": grouped_commits_list
+                "commit_analysis": grouped_commits_list,
+                "total_additions": total_additions,
+                "total_deletions": total_deletions
             }
 
         except Exception as e:
@@ -181,7 +246,9 @@ class GitHubAnalyzer:
                 "branches": [],
                 "commit_count": 0,
                 "contributors": {},
-                "languages": []
+                "languages": [],
+                "total_additions": 0,
+                "total_deletions": 0
             }
 
     def clone_repo(self, repo_url, target_dir="cloned_repo"):
