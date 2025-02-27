@@ -1,7 +1,7 @@
 from django.shortcuts import render
 import plotly.express as px
 import plotly.graph_objects as go
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 import pandas as pd
 from django.contrib import messages
 import json
@@ -14,6 +14,8 @@ from .constants import (
     MAIN_LIBRARIES,
     ANALYSIS_SETTINGS
 )
+import time
+import shutil
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(root_dir)
 from github_getter import GitHubAnalyzer
@@ -107,8 +109,7 @@ def quick_analysis(request):
             # Debug después de crear el contexto
             logger.info("Debug: Verificando contexto")
             logger.info(f"Graphs keys: {context['graphs'].keys()}")
-            logger.info(f"Code additions graph length: {len(context['graphs']['code_additions'])}")
-            logger.info(f"Code deletions graph length: {len(context['graphs']['code_deletions'])}")
+
             
             return render(request, 'quick_analysis.html', context)
                 
@@ -126,9 +127,6 @@ def quick_analysis(request):
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
 
-    # Primero obtener las visualizaciones de cambios de código
-    code_changes_graphs = create_code_changes_visualizations(all_commits)
-    
     # 1. Primero crear las gráficas de actividad y distribución
     logger.info("Generating commit activity visualization")
     
@@ -249,7 +247,6 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
 
     # 3. Análisis de lenguajes
     logger.info("Analyzing repository languages")
-    repo_stats = analyzer.get_repo_stats(repo_url)
     languages_data = []
     
     if repo_stats and "languages" in repo_stats:
@@ -399,12 +396,16 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         'graphs': {
             'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
             'developer_distribution': fig_authors.to_html(full_html=False, include_plotlyjs=True),
-            'code_additions': code_changes_graphs['code_additions'],
-            'code_deletions': code_changes_graphs['code_deletions']
         },
+        'commits_table': commits_table_html,
         'languages': languages_data,
         'libraries': libraries_data
     }
+
+    # Log del contenido del contexto para depuración
+    logger.info("Contenido del contexto generado:")
+    logger.info(f"- Longitud de la tabla de commits: {len(commits_table_html)}")
+    logger.info(f"- Contenido de la tabla: {commits_table_html[:200]}...")  # Ver el inicio de la tabla
 
     # Análisis de package.json (JavaScript)
     try:
@@ -448,146 +449,16 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
 
     return context
 
-def create_code_changes_visualizations(all_commits):
-    """Crea visualizaciones para mostrar las adiciones y eliminaciones de código por desarrollador"""
-    logger.info("Generating code changes visualizations")
-    
+def download_csv(request, filename):
+    """Vista para descargar archivos CSV"""
     try:
-        # Obtener datos de adiciones y eliminaciones por commit
-        commit_changes_data = []
-        
-        for commit in all_commits:
-            try:
-                # Obtener los archivos modificados en el commit
-                files_changed = commit.files
-                
-                # Calcular total de adiciones y eliminaciones
-                total_additions = 0
-                total_deletions = 0
-                
-                for file in files_changed:
-                    patch = file.patch if hasattr(file, 'patch') else ''
-                    if patch:
-                        # Contar líneas añadidas y eliminadas del patch
-                        for line in patch.split('\n'):
-                            if line.startswith('+') and not line.startswith('+++'):
-                                total_additions += 1
-                            elif line.startswith('-') and not line.startswith('---'):
-                                total_deletions += 1
-                
-                # Guardar los datos del commit
-                commit_changes_data.append({
-                    'fecha': commit.commit.author.date.date(),
-                    'autor': commit.author.login if commit.author else commit.commit.author.name,
-                    'adiciones': total_additions,
-                    'eliminaciones': total_deletions,
-                    'archivos': len(files_changed)
-                })
-                
-                logger.info(f"""
-                Commit {commit.sha[:7]} processed:
-                Author: {commit.author.login if commit.author else commit.commit.author.name}
-                Files changed: {len(files_changed)}
-                Additions: {total_additions}
-                Deletions: {total_deletions}
-                """)
-                
-            except Exception as e:
-                logger.warning(f"Error processing commit {commit.sha[:7]}: {str(e)}")
-                continue
-
-        if not commit_changes_data:
-            logger.warning("No commit data available")
-            return {
-                'code_additions': '<div class="alert alert-warning">No hay datos de cambios disponibles</div>',
-                'code_deletions': '<div class="alert alert-warning">No hay datos de cambios disponibles</div>'
-            }
-
-        # Crear DataFrame y agrupar por fecha y autor
-        df = pd.DataFrame(commit_changes_data)
-        df_grouped = df.groupby(['fecha', 'autor']).agg({
-            'adiciones': 'sum',
-            'eliminaciones': 'sum',
-            'archivos': 'sum'
-        }).reset_index()
-
-        # Crear gráfica de adiciones
-        fig_additions = px.line(
-            df_grouped,
-            x='fecha',
-            y='adiciones',
-            color='autor',
-            title=f'Líneas de Código Añadidas por Desarrollador (Total: {df["adiciones"].sum():,})',
-            labels={
-                'fecha': 'Fecha',
-                'adiciones': 'Líneas Añadidas',
-                'autor': 'Desarrollador'
-            }
-        )
-
-        fig_additions.update_traces(mode='lines+markers')
-        fig_additions.update_layout(
-            height=400,
-            showlegend=True,
-            hovermode='x unified',
-            template='plotly_white',
-            xaxis_title="Fecha",
-            yaxis_title="Líneas Añadidas"
-        )
-
-        # Crear gráfica de eliminaciones
-        fig_deletions = px.line(
-            df_grouped,
-            x='fecha',
-            y='eliminaciones',
-            color='autor',
-            title=f'Líneas de Código Eliminadas por Desarrollador (Total: {df["eliminaciones"].sum():,})',
-            labels={
-                'fecha': 'Fecha',
-                'eliminaciones': 'Líneas Eliminadas',
-                'autor': 'Desarrollador'
-            }
-        )
-
-        fig_deletions.update_traces(mode='lines+markers')
-        fig_deletions.update_layout(
-            height=400,
-            showlegend=True,
-            hovermode='x unified',
-            template='plotly_white',
-            xaxis_title="Fecha",
-            yaxis_title="Líneas Eliminadas"
-        )
-
-        # Generar HTML para las gráficas
-        additions_html = fig_additions.to_html(
-            full_html=False,
-            include_plotlyjs=True,
-            config={'displayModeBar': True, 'responsive': True}
-        )
-        
-        deletions_html = fig_deletions.to_html(
-            full_html=False,
-            include_plotlyjs=True,
-            config={'displayModeBar': True, 'responsive': True}
-        )
-
-        logger.info(f"""
-        Visualization generation completed:
-        Total commits processed: {len(commit_changes_data)}
-        Total files changed: {df['archivos'].sum():,}
-        Total additions: {df['adiciones'].sum():,}
-        Total deletions: {df['eliminaciones'].sum():,}
-        """)
-
-        return {
-            'code_additions': additions_html,
-            'code_deletions': deletions_html
-        }
-
+        file_path = os.path.join('github_stats', filename)
+        if os.path.exists(file_path):
+            response = FileResponse(open(file_path, 'rb'))
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        else:
+            raise Http404("El archivo no existe")
     except Exception as e:
-        logger.error(f"Error generating visualizations: {str(e)}", exc_info=True)
-        return {
-            'code_additions': f'<div class="alert alert-warning">Error al generar las gráficas: {str(e)}</div>',
-            'code_deletions': f'<div class="alert alert-warning">Error al generar las gráficas: {str(e)}</div>'
-        }
+        logger.error(f"Error al descargar el archivo {filename}: {str(e)}")
+        raise Http404("Error al descargar el archivo")

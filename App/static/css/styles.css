@@ -720,4 +720,127 @@ body {
         max-width: 100%;
         margin: 0.5rem 1rem;
     }
+}
+
+/* DataTables Styles */
+.commits-table-container {
+    margin: 20px 0;
+    overflow-x: auto;
+}
+
+#commits-table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+}
+
+#commits-table th {
+    background-color: #f8f9fa;
+    padding: 12px;
+    border: 1px solid #dee2e6;
+}
+
+#commits-table td {
+    padding: 12px;
+    border: 1px solid #dee2e6;
+}
+
+#commits-table tbody tr:hover {
+    background-color: rgba(0,0,0,.075);
+}
+
+/* DataTables controls */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+    margin: 10px 0;
+}
+
+.dataTables_wrapper .dt-buttons {
+    margin-bottom: 20px;
+}
+
+.dt-button {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    border-radius: 0.2rem;
+    color: #fff;
+    background-color: #6c757d;
+    border: 1px solid transparent;
+    margin-right: 5px;
+}
+
+.dt-button:hover {
+    background-color: #5a6268;
+    color: #fff;
+}
+
+/* Graph Container Styles */
+.graph-container {
+    width: 100%;
+    min-height: 400px;
+    margin: 0 auto;
+    position: relative;
+}
+
+/* Alert Styles */
+.alert {
+    margin-top: 10px;
+    margin-bottom: 10px;
+}
+
+/* Table Responsive Styles */
+@media (max-width: 768px) {
+    .commits-table-container {
+        margin: 10px 0;
+    }
+    
+    .table {
+        font-size: 0.9rem;
+    }
+    
+    .dt-buttons {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .dt-button {
+        flex: 1;
+        min-width: 100px;
+        margin-right: 0;
+    }
+}
+
+/* Download Buttons Styles */
+.card .btn-primary {
+    padding: 0.75rem 1.5rem;
+    font-size: 1rem;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+}
+
+.card .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.card .btn-primary i {
+    font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+    .d-flex.gap-3 {
+        flex-direction: column;
+        gap: 1rem !important;
+    }
+    
+    .card .btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
 } 
