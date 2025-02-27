@@ -95,6 +95,7 @@ class GitHubAnalyzer:
             commit_count = 0
             contributors_data = {}
             commits_by_branch_author = []
+            detailed_commit_data = []
             total_additions = 0
             total_deletions = 0
 
@@ -121,6 +122,13 @@ class GitHubAnalyzer:
                     deletions = commit.stats.deletions
                     total_additions += additions
                     total_deletions += deletions
+
+                    # Commit message
+                    message = commit.commit.message
+                    # Eliminar saltos de línea y retornos para evitar problemas en CSV
+                    message = message.replace("\n", " ").replace('\r', '')
+
+                    commit_date = commit.commit.author.date.strftime("%Y-%m-%d %H:%M:%S")
                     
                     # Recolección de datos para CSV
                     commits_by_branch_author.append({
@@ -130,6 +138,17 @@ class GitHubAnalyzer:
                         'Additions': additions,
                         'Deletions': deletions,
                         'CommitSHA': commit.sha
+                    })
+
+                    # Datos detallados de cada commit
+                    detailed_commit_data.append({
+                        'Branch': branch.name,
+                        'Author': author,
+                        'CommitSHA': commit.sha,
+                        'Message': message,
+                        'Additions': additions,
+                        'Deletions': deletions,
+                        'Date': commit_date
                     })
 
             # Crear DataFrame y agrupar por rama y autor
@@ -147,6 +166,12 @@ class GitHubAnalyzer:
             csv_path = os.path.join(output_dir, 'commits_by_branch_author.csv')
             grouped_commits.to_csv(csv_path, index=False)
             self.logger.info(f"Commit statistics saved to {csv_path}")
+
+            if detailed_commit_data:
+                df_detailed = pd.DataFrame(detailed_commit_data)
+                detailed_csv_path = os.path.join(output_dir, 'detailed_commits.csv')
+                df_detailed.to_csv(detailed_csv_path, index=False)
+                self.logger.info(f"Detailed commit information saved to {detailed_csv_path}")
 
             # Análisis de lenguajes de programación
             try:
