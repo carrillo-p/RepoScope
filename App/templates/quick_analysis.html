@@ -1,7 +1,36 @@
 {% extends 'base.html' %}
 {% load static %}
 
+{% block extra_head %}
+<!-- Asegurarse de que Plotly.js se carga antes que nada -->
+<script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<style>
+    .graph-container {
+        width: 100%;
+        min-height: 400px;
+        margin: 0 auto;
+        position: relative;
+    }
+    .alert {
+        margin-top: 10px;
+        margin-bottom: 10px;
+    }
+</style>
+{% endblock %}
+
 {% block title %}Análisis Rápido - RepoScope{% endblock %}
+
+{% block extra_css %}
+<style>
+    .graph-container {
+        width: 100%;
+        min-height: 400px;
+        margin: 0 auto;
+        position: relative;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <!-- Añadir el loader -->
@@ -70,6 +99,26 @@
                     <div class="card-body">
                         <h3 class="card-title">Distribución por Desarrollador</h3>
                         {{ graphs.developer_distribution|safe }}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Líneas de Código Añadidas</h3>
+                        <div class="graph-container" id="additions-graph">
+                            {{ graphs.code_additions|safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h3 class="card-title">Líneas de Código Eliminadas</h3>
+                        <div class="graph-container" id="deletions-graph">
+                            {{ graphs.code_deletions|safe }}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -164,4 +213,28 @@ window.onload = function() {
     }
 }
 </script>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Verificar que Plotly está disponible
+    if (typeof Plotly === 'undefined') {
+        console.error('Plotly is not loaded');
+        return;
+    }
+
+    // Intentar redibujar las gráficas
+    const additionsGraph = document.getElementById('additions-graph');
+    const deletionsGraph = document.getElementById('deletions-graph');
+
+    if (additionsGraph && additionsGraph.data) {
+        Plotly.newPlot('additions-graph', additionsGraph.data, additionsGraph.layout);
+    }
+
+    if (deletionsGraph && deletionsGraph.data) {
+        Plotly.newPlot('deletions-graph', deletionsGraph.data, deletionsGraph.layout);
+    }
+});
+</script>
+{% endblock %}
 {% endblock %} 

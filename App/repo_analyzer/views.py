@@ -49,10 +49,24 @@ def quick_analysis(request):
                     )
                     for commit in branch_commits:
                         if commit.sha not in [c.sha for c in all_commits]:
-                            all_commits.append(commit)
-                            author = (commit.author.login if commit.author 
-                                    else commit.commit.author.email or commit.commit.author.name)
-                            commit_authors.append(author)
+                            # Obtener el commit completo con todos los detalles y archivos
+                            detailed_commit = repo.get_commit(commit.sha)
+                            
+                            # Verificar que tenemos acceso a los archivos
+                            if hasattr(detailed_commit, 'files'):
+                                all_commits.append(detailed_commit)
+                                author = (detailed_commit.author.login if detailed_commit.author 
+                                         else detailed_commit.commit.author.email or detailed_commit.commit.author.name)
+                                commit_authors.append(author)
+                                
+                                # Debug log
+                                logger.info(f"""
+                                Commit details:
+                                SHA: {detailed_commit.sha[:7]}
+                                Author: {author}
+                                Files: {len(detailed_commit.files)}
+                                Has patches: {any(hasattr(f, 'patch') for f in detailed_commit.files)}
+                                """)
                 except Exception as e:
                     logger.warning(f"Error al analizar rama {branch.name}: {e}")
                     continue
@@ -62,8 +76,40 @@ def quick_analysis(request):
                 messages.warning(request, QUICK_ANALYSIS_ERROR_MESSAGES['no_commits'])
                 return render(request, 'quick_analysis.html')
 
+            # Añadir debug
+            for commit in all_commits[:5]:  # Primeros 5 commits
+                detailed_commit = commit.repository.get_commit(commit.sha)
+                logger.info(f"""
+                Commit: {commit.sha[:7]}
+                Author: {commit.author.login if commit.author else 'None'}
+                Stats available: {hasattr(detailed_commit, 'stats')}
+                Additions: {detailed_commit.stats.additions if hasattr(detailed_commit, 'stats') else 'N/A'}
+                Deletions: {detailed_commit.stats.deletions if hasattr(detailed_commit, 'stats') else 'N/A'}
+                """)
+
+            # Debug de los primeros commits
+            for commit in all_commits[:3]:
+                try:
+                    url = commit.url
+                    response = commit._requester.requestJson("GET", url)[0]
+                    logger.info(f"""
+                    Debug - Commit API Response:
+                    URL: {url}
+                    Has stats: {'stats' in response}
+                    Stats: {response.get('stats', 'No stats available')}
+                    """)
+                except Exception as e:
+                    logger.error(f"Error getting commit data: {str(e)}")
+
             # Crear visualizaciones y análisis
             context = create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url)
+            
+            # Debug después de crear el contexto
+            logger.info("Debug: Verificando contexto")
+            logger.info(f"Graphs keys: {context['graphs'].keys()}")
+            logger.info(f"Code additions graph length: {len(context['graphs']['code_additions'])}")
+            logger.info(f"Code deletions graph length: {len(context['graphs']['code_deletions'])}")
+            
             return render(request, 'quick_analysis.html', context)
                 
         except Exception as e:
@@ -80,6 +126,10 @@ def quick_analysis(request):
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
 
+    # Primero obtener las visualizaciones de cambios de código
+    code_changes_graphs = create_code_changes_visualizations(all_commits)
+    
+    # 1. Primero crear las gráficas de actividad y distribución
     logger.info("Generating commit activity visualization")
     
     # Generación de visualización de actividad
@@ -197,7 +247,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
             x=0.5, y=0.5, showarrow=False
         )
 
-    # Análisis de lenguajes utilizados
+    # 3. Análisis de lenguajes
     logger.info("Analyzing repository languages")
     repo_stats = analyzer.get_repo_stats(repo_url)
     languages_data = []
@@ -215,7 +265,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     else:
         logger.warning("No language data available in repository stats")
 
-    # Detección de bibliotecas
+    # 4. Detección de bibliotecas
     logger.info("Starting library detection")
 
     def parse_requirement_line(line):
@@ -343,10 +393,14 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         pass
 
     logger.info("Analysis completed successfully")
+
+    # Crear el contexto final con todas las visualizaciones
     context = {
         'graphs': {
-            'commits_activity': fig_activity.to_html(full_html=False),
-            'developer_distribution': fig_authors.to_html(full_html=False)
+            'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
+            'developer_distribution': fig_authors.to_html(full_html=False, include_plotlyjs=True),
+            'code_additions': code_changes_graphs['code_additions'],
+            'code_deletions': code_changes_graphs['code_deletions']
         },
         'languages': languages_data,
         'libraries': libraries_data
@@ -392,14 +446,148 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     # Ordenar bibliotecas por tipo y nombre
     libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
-    # Preparar contexto para la plantilla
-    context = {
-        'graphs': {
-            'commits_activity': fig_activity.to_html(full_html=False),
-            'developer_distribution': fig_authors.to_html(full_html=False)
-        },
-        'languages': languages_data,
-        'libraries': libraries_data
-    }
-
     return context
+
+def create_code_changes_visualizations(all_commits):
+    """Crea visualizaciones para mostrar las adiciones y eliminaciones de código por desarrollador"""
+    logger.info("Generating code changes visualizations")
+    
+    try:
+        # Obtener datos de adiciones y eliminaciones por commit
+        commit_changes_data = []
+        
+        for commit in all_commits:
+            try:
+                # Obtener los archivos modificados en el commit
+                files_changed = commit.files
+                
+                # Calcular total de adiciones y eliminaciones
+                total_additions = 0
+                total_deletions = 0
+                
+                for file in files_changed:
+                    patch = file.patch if hasattr(file, 'patch') else ''
+                    if patch:
+                        # Contar líneas añadidas y eliminadas del patch
+                        for line in patch.split('\n'):
+                            if line.startswith('+') and not line.startswith('+++'):
+                                total_additions += 1
+                            elif line.startswith('-') and not line.startswith('---'):
+                                total_deletions += 1
+                
+                # Guardar los datos del commit
+                commit_changes_data.append({
+                    'fecha': commit.commit.author.date.date(),
+                    'autor': commit.author.login if commit.author else commit.commit.author.name,
+                    'adiciones': total_additions,
+                    'eliminaciones': total_deletions,
+                    'archivos': len(files_changed)
+                })
+                
+                logger.info(f"""
+                Commit {commit.sha[:7]} processed:
+                Author: {commit.author.login if commit.author else commit.commit.author.name}
+                Files changed: {len(files_changed)}
+                Additions: {total_additions}
+                Deletions: {total_deletions}
+                """)
+                
+            except Exception as e:
+                logger.warning(f"Error processing commit {commit.sha[:7]}: {str(e)}")
+                continue
+
+        if not commit_changes_data:
+            logger.warning("No commit data available")
+            return {
+                'code_additions': '<div class="alert alert-warning">No hay datos de cambios disponibles</div>',
+                'code_deletions': '<div class="alert alert-warning">No hay datos de cambios disponibles</div>'
+            }
+
+        # Crear DataFrame y agrupar por fecha y autor
+        df = pd.DataFrame(commit_changes_data)
+        df_grouped = df.groupby(['fecha', 'autor']).agg({
+            'adiciones': 'sum',
+            'eliminaciones': 'sum',
+            'archivos': 'sum'
+        }).reset_index()
+
+        # Crear gráfica de adiciones
+        fig_additions = px.line(
+            df_grouped,
+            x='fecha',
+            y='adiciones',
+            color='autor',
+            title=f'Líneas de Código Añadidas por Desarrollador (Total: {df["adiciones"].sum():,})',
+            labels={
+                'fecha': 'Fecha',
+                'adiciones': 'Líneas Añadidas',
+                'autor': 'Desarrollador'
+            }
+        )
+
+        fig_additions.update_traces(mode='lines+markers')
+        fig_additions.update_layout(
+            height=400,
+            showlegend=True,
+            hovermode='x unified',
+            template='plotly_white',
+            xaxis_title="Fecha",
+            yaxis_title="Líneas Añadidas"
+        )
+
+        # Crear gráfica de eliminaciones
+        fig_deletions = px.line(
+            df_grouped,
+            x='fecha',
+            y='eliminaciones',
+            color='autor',
+            title=f'Líneas de Código Eliminadas por Desarrollador (Total: {df["eliminaciones"].sum():,})',
+            labels={
+                'fecha': 'Fecha',
+                'eliminaciones': 'Líneas Eliminadas',
+                'autor': 'Desarrollador'
+            }
+        )
+
+        fig_deletions.update_traces(mode='lines+markers')
+        fig_deletions.update_layout(
+            height=400,
+            showlegend=True,
+            hovermode='x unified',
+            template='plotly_white',
+            xaxis_title="Fecha",
+            yaxis_title="Líneas Eliminadas"
+        )
+
+        # Generar HTML para las gráficas
+        additions_html = fig_additions.to_html(
+            full_html=False,
+            include_plotlyjs=True,
+            config={'displayModeBar': True, 'responsive': True}
+        )
+        
+        deletions_html = fig_deletions.to_html(
+            full_html=False,
+            include_plotlyjs=True,
+            config={'displayModeBar': True, 'responsive': True}
+        )
+
+        logger.info(f"""
+        Visualization generation completed:
+        Total commits processed: {len(commit_changes_data)}
+        Total files changed: {df['archivos'].sum():,}
+        Total additions: {df['adiciones'].sum():,}
+        Total deletions: {df['eliminaciones'].sum():,}
+        """)
+
+        return {
+            'code_additions': additions_html,
+            'code_deletions': deletions_html
+        }
+
+    except Exception as e:
+        logger.error(f"Error generating visualizations: {str(e)}", exc_info=True)
+        return {
+            'code_additions': f'<div class="alert alert-warning">Error al generar las gráficas: {str(e)}</div>',
+            'code_deletions': f'<div class="alert alert-warning">Error al generar las gráficas: {str(e)}</div>'
+        }
