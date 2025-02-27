@@ -111,6 +111,21 @@ class GitHubAnalyzer:
                     if commit.sha in processed_commits:
                         continue
 
+                    # Ignorar commits de merge
+                    is_merge_commit = False
+                    if len(commit.parents) > 1:
+                        is_merge_commit = True
+
+                    elif any(pattern in commit.commit.message.lower() for pattern in [
+                        "merge pull request", "merge branch", "merge remote"
+                    ]):
+                        is_merge_commit = True
+
+                    if is_merge_commit:
+                        self.logger.debug(f"Skipping merge commit: {commit.sha[:7]} in branch {branch.name}")
+                        processed_commits.add(commit.sha)  # Mark as processed so we don't reprocess
+                        continue
+
                     processed_commits.add(commit.sha)
                     commit_count += 1
                     branch_unique_commits += 1
