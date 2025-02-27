@@ -14,6 +14,7 @@ import requests.exceptions
 from dotenv import load_dotenv
 from github_getter import GitHubAnalyzer
 from briefing_analyzer import ComplianceAnalyzer
+from RAG_process import RepoRAGProcessor
 
 class LLMClient:
     def __init__(
@@ -21,7 +22,7 @@ class LLMClient:
         groq_api_key: Optional[str] = None,
         groq_model: str = "mixtral-8x7b-32768",
         ollama_model: str = "mistral:latest",
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         self.groq_model = groq_model
@@ -96,7 +97,8 @@ class GitHubRAGAnalyzer:
         self,
         model_name: str = "mixtral-8x7b-32768",
         api_key: str = None,
-        ollama_model: str = 'mistral:latest'
+        ollama_model: str = 'mistral:latest',
+        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     ):
         load_dotenv()
         
@@ -116,48 +118,82 @@ class GitHubRAGAnalyzer:
         )
         self.github_analyzer = GitHubAnalyzer()
         self.compliance_analyzer = ComplianceAnalyzer()
+        self.rag_processor = RepoRAGProcessor(embedding_model_name=embedding_model)
 
     def analyze_requirements_completion(self, repo_url: str, briefing_path: str) -> Dict[str, Any]:
         try:
             # Get repository content
+            self.logger.info(f"Starting analysis for repository: {repo_url}")
             repo_path = self.github_analyzer.clone_repo(repo_url)
             if not repo_path:
                 raise ValueError("Failed to clone repository")
-
-            repo_docs = self.github_analyzer.extract_text_from_repo(repo_path)
-            if not repo_docs:
-                raise ValueError("No content found in repository")
+            self.logger.info(f"Repository cloned to: {repo_path}")
+            
+            # Process repository to RAG
+            self.logger.info("Starting repository processing...")
+            repo_success = self.rag_processor.process_repository(repo_path)
+            if not repo_success:
+                self.logger.error("Repository processing failed")
+                raise ValueError("Failed to process repository content")
+            self.logger.info("Repository processing completed successfully")
+            
+            # Process briefing into RAG
+            self.logger.info(f"Processing briefing document: {briefing_path}")
+            if not os.path.exists(briefing_path):
+                self.logger.error(f"Briefing file not found: {briefing_path}")
+                raise ValueError(f"Briefing file not found: {briefing_path}")
+                
+            briefing_success = self.rag_processor.process_briefing(briefing_path)
+            if not briefing_success:
+                self.logger.error("Briefing processing failed")
+                raise ValueError("Failed to process briefing document")
+            self.logger.info("Briefing processing completed successfully")
             
             # Get repository statistics
             repo_stats = self.github_analyzer.get_repo_stats(repo_url)
-            
-            # Get briefing content
-            briefing_text = self.compliance_analyzer.extract_text_from_pdf(briefing_path)
-            if not briefing_text:
-                raise ValueError("Failed to extract briefing text")
+            detected_technologies = self.rag_processor.technologies if hasattr(self.rag_processor, 'technologies') else {}
 
-            # Prepare content with length limit
-            max_length = 4000 if not self.llm_client.using_ollama else 25000
-            repo_content = "\n".join(repo_docs)[:max_length]
+            # Get briefing content
+            analysis_queries = [
+                "¿Qué requisitos técnicos establece el briefing?",
+                "¿Qué componentes y funcionalidades tiene este repositorio?",
+                "¿Cómo se estructura y organiza el código en este repositorio?",
+                "¿Qué arquitectura y tecnologías se utilizan en este proyecto?",
+                "¿Qué frameworks, librerías y herramientas están configuradas en el proyecto?",
+                "¿Qué archivos de configuración de dependencias existen en el repositorio?"
+            ]
+
+            context_parts = []
+            for query in analysis_queries:
+                retrieved_context = self.rag_processor.get_formatted_context(query, k=5)
+                context_parts.append(f"Consulta: {query}\n{retrieved_context}")
             
-            # Generate analysis prompt
+            rag_context = "\n\n".join(context_parts)
+            
             prompt = f"""
             Eres un analista técnico especializado en proyectos de IA/ML.
-
-            BRIEFING (Requisitos del proyecto):
-            {briefing_text}
-
-            CONTENIDO DEL REPOSITORIO:
-            {repo_content}
-
+            
+            Basándote en la información recuperada del repositorio y del briefing, analiza si el proyecto cumple con los requisitos.
+            
+            CONTEXTO RECUPERADO:
+            {rag_context}
+            
+            TECNOLOGÍAS DETECTADAS EN EL REPOSITORIO:
+            {json.dumps(detected_technologies, indent=2, ensure_ascii=False)}
+            
             ESTADÍSTICAS DEL REPOSITORIO:
             {json.dumps(repo_stats, indent=2, ensure_ascii=False)}
-
+            
+            INSTRUCCIONES:
+            1. Primero, identifica todas las tecnologías ya presentes en el repositorio basándote en el análisis proporcionado.
+            2. Compara estos con los requisitos técnicos del briefing.
+            3. Al hacer recomendaciones, asegúrate de NO sugerir tecnologías que ya estén siendo utilizadas.
+            
             Por favor, analiza el repositorio y responde las siguientes preguntas:
             1. ¿Cumple el repositorio con los requisitos del briefing? ¿Por qué?
             2. ¿Qué requisitos o funcionalidades faltan por implementar?
-            3. ¿Qué mejoras específicas recomiendas para el proyecto?
-
+            3. ¿Qué mejoras específicas recomiendas para el proyecto? (NO incluyas tecnologías ya detectadas)
+            
             Genera una respuesta en español, clara y concisa, en formato de párrafo.
             Enfócate en los aspectos positivos, negativos y recomendaciones de mejora.
             """
