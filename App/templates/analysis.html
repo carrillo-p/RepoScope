@@ -255,6 +255,26 @@ function clearUrl() {
     document.getElementById('repo_url').focus();
 }
 </script>
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+    <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-warning{% endif %}">
+        {{ message }}
+        {% if 'conexión' in message.message|lower %}
+        <div class="mt-2 small">
+            <strong>Sugerencias:</strong>
+            <ul>
+                <li>Verifique que el servicio Ollama esté ejecutándose</li>
+                <li>Intente reiniciar el servicio Ollama</li>
+                <li>Compruebe su conexión a internet</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 {% endblock %}
 
 {% block extra_head %}

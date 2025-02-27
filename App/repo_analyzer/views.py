@@ -1,7 +1,7 @@
 from django.shortcuts import render
 import plotly.express as px
 import plotly.graph_objects as go
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 import pandas as pd
 from django.contrib import messages
 import json
@@ -14,6 +14,8 @@ from .constants import (
     MAIN_LIBRARIES,
     ANALYSIS_SETTINGS
 )
+import time
+import shutil
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.append(root_dir)
 from github_getter import GitHubAnalyzer
@@ -49,10 +51,24 @@ def quick_analysis(request):
                     )
                     for commit in branch_commits:
                         if commit.sha not in [c.sha for c in all_commits]:
-                            all_commits.append(commit)
-                            author = (commit.author.login if commit.author 
-                                    else commit.commit.author.email or commit.commit.author.name)
-                            commit_authors.append(author)
+                            # Obtener el commit completo con todos los detalles y archivos
+                            detailed_commit = repo.get_commit(commit.sha)
+                            
+                            # Verificar que tenemos acceso a los archivos
+                            if hasattr(detailed_commit, 'files'):
+                                all_commits.append(detailed_commit)
+                                author = (detailed_commit.author.login if detailed_commit.author 
+                                         else detailed_commit.commit.author.email or detailed_commit.commit.author.name)
+                                commit_authors.append(author)
+                                
+                                # Debug log
+                                logger.info(f"""
+                                Commit details:
+                                SHA: {detailed_commit.sha[:7]}
+                                Author: {author}
+                                Files: {len(detailed_commit.files)}
+                                Has patches: {any(hasattr(f, 'patch') for f in detailed_commit.files)}
+                                """)
                 except Exception as e:
                     logger.warning(f"Error al analizar rama {branch.name}: {e}")
                     continue
@@ -62,8 +78,39 @@ def quick_analysis(request):
                 messages.warning(request, QUICK_ANALYSIS_ERROR_MESSAGES['no_commits'])
                 return render(request, 'quick_analysis.html')
 
+            # Añadir debug
+            for commit in all_commits[:5]:  # Primeros 5 commits
+                detailed_commit = commit.repository.get_commit(commit.sha)
+                logger.info(f"""
+                Commit: {commit.sha[:7]}
+                Author: {commit.author.login if commit.author else 'None'}
+                Stats available: {hasattr(detailed_commit, 'stats')}
+                Additions: {detailed_commit.stats.additions if hasattr(detailed_commit, 'stats') else 'N/A'}
+                Deletions: {detailed_commit.stats.deletions if hasattr(detailed_commit, 'stats') else 'N/A'}
+                """)
+
+            # Debug de los primeros commits
+            for commit in all_commits[:3]:
+                try:
+                    url = commit.url
+                    response = commit._requester.requestJson("GET", url)[0]
+                    logger.info(f"""
+                    Debug - Commit API Response:
+                    URL: {url}
+                    Has stats: {'stats' in response}
+                    Stats: {response.get('stats', 'No stats available')}
+                    """)
+                except Exception as e:
+                    logger.error(f"Error getting commit data: {str(e)}")
+
             # Crear visualizaciones y análisis
             context = create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url)
+            
+            # Debug después de crear el contexto
+            logger.info("Debug: Verificando contexto")
+            logger.info(f"Graphs keys: {context['graphs'].keys()}")
+
+            
             return render(request, 'quick_analysis.html', context)
                 
         except Exception as e:
@@ -80,6 +127,7 @@ def quick_analysis(request):
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
 
+    # 1. Primero crear las gráficas de actividad y distribución
     logger.info("Generating commit activity visualization")
     
     # Generación de visualización de actividad
@@ -197,9 +245,8 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
             x=0.5, y=0.5, showarrow=False
         )
 
-    # Análisis de lenguajes utilizados
+    # 3. Análisis de lenguajes
     logger.info("Analyzing repository languages")
-    repo_stats = analyzer.get_repo_stats(repo_url)
     languages_data = []
     
     if repo_stats and "languages" in repo_stats:
@@ -215,7 +262,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     else:
         logger.warning("No language data available in repository stats")
 
-    # Detección de bibliotecas
+    # 4. Detección de bibliotecas
     logger.info("Starting library detection")
 
     def parse_requirement_line(line):
@@ -343,14 +390,22 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         pass
 
     logger.info("Analysis completed successfully")
+
+    # Crear el contexto final con todas las visualizaciones
     context = {
         'graphs': {
-            'commits_activity': fig_activity.to_html(full_html=False),
-            'developer_distribution': fig_authors.to_html(full_html=False)
+            'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
+            'developer_distribution': fig_authors.to_html(full_html=False, include_plotlyjs=True),
         },
+        'commits_table': commits_table_html,
         'languages': languages_data,
         'libraries': libraries_data
     }
+
+    # Log del contenido del contexto para depuración
+    logger.info("Contenido del contexto generado:")
+    logger.info(f"- Longitud de la tabla de commits: {len(commits_table_html)}")
+    logger.info(f"- Contenido de la tabla: {commits_table_html[:200]}...")  # Ver el inicio de la tabla
 
     # Análisis de package.json (JavaScript)
     try:
@@ -392,14 +447,18 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     # Ordenar bibliotecas por tipo y nombre
     libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
-    # Preparar contexto para la plantilla
-    context = {
-        'graphs': {
-            'commits_activity': fig_activity.to_html(full_html=False),
-            'developer_distribution': fig_authors.to_html(full_html=False)
-        },
-        'languages': languages_data,
-        'libraries': libraries_data
-    }
-
     return context
+
+def download_csv(request, filename):
+    """Vista para descargar archivos CSV"""
+    try:
+        file_path = os.path.join('github_stats', filename)
+        if os.path.exists(file_path):
+            response = FileResponse(open(file_path, 'rb'))
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        else:
+            raise Http404("El archivo no existe")
+    except Exception as e:
+        logger.error(f"Error al descargar el archivo {filename}: {str(e)}")
+        raise Http404("Error al descargar el archivo")
