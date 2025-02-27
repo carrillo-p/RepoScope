@@ -95,27 +95,50 @@ class GitHubAnalyzer:
             commit_count = 0
             contributors_data = {}
             commits_by_branch_author = []
+            total_additions = 0
+            total_deletions = 0
+
+            processed_commits = set()
 
             # Análisis de commits por rama
             for branch in branches:
                 commits = repo.get_commits(sha=branch.name)
                 branch_commits = list(commits)
-                commit_count += len(branch_commits)
+                branch_unique_commits = 0
 
                 for commit in branch_commits:
+                    if commit.sha in processed_commits:
+                        continue
+
+                    processed_commits.add(commit.sha)
+                    commit_count += 1
+                    branch_unique_commits += 1
+
                     author = commit.author.login if commit.author else "Unknown"
                     contributors_data[author] = contributors_data.get(author, 0) + 1
+
+                    additions = commit.stats.additions
+                    deletions = commit.stats.deletions
+                    total_additions += additions
+                    total_deletions += deletions
                     
                     # Recolección de datos para CSV
                     commits_by_branch_author.append({
                         'Branch': branch.name,
                         'Author': author,
-                        'Commits': 1
+                        'Commits': 1,
+                        'Additions': additions,
+                        'Deletions': deletions,
+                        'CommitSHA': commit.sha
                     })
 
             # Crear DataFrame y agrupar por rama y autor
             df_commits = pd.DataFrame(commits_by_branch_author)
-            grouped_commits = df_commits.groupby(['Branch', 'Author'])['Commits'].sum().reset_index()
+            grouped_commits = df_commits.groupby(['Branch', 'Author']).agg({
+                'Commits': 'sum',
+                'Additions': 'sum',
+                'Deletions': 'sum'
+            }).reset_index()
             grouped_commits_list = grouped_commits.to_dict('records')
 
             # Guardar estadísticas en CSV
@@ -172,7 +195,9 @@ class GitHubAnalyzer:
                 "commit_count": commit_count,
                 "contributors": contributors_data,
                 "languages": languages_data,
-                "commit_analysis": grouped_commits_list
+                "commit_analysis": grouped_commits_list,
+                "total_additions": total_additions,
+                "total_deletions": total_deletions
             }
 
         except Exception as e:
@@ -181,7 +206,9 @@ class GitHubAnalyzer:
                 "branches": [],
                 "commit_count": 0,
                 "contributors": {},
-                "languages": []
+                "languages": [],
+                "total_additions": 0,
+                "total_deletions": 0
             }
 
     def clone_repo(self, repo_url, target_dir="cloned_repo"):
