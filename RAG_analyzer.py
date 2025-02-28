@@ -171,31 +171,74 @@ class GitHubRAGAnalyzer:
             rag_context = "\n\n".join(context_parts)
             
             prompt = f"""
-            Eres un analista técnico especializado en proyectos de IA/ML.
-            
-            Basándote en la información recuperada del repositorio y del briefing, analiza si el proyecto cumple con los requisitos.
-            
-            CONTEXTO RECUPERADO:
+            You are an AI/ML Technical Analyst with expertise in code quality assessment, AI-generated code detection, and technical debt evaluation. Your task is to critically analyze a GitHub repository from bootcamp students, considering multi-level objectives from the briefing (up to 4 levels: essential/medium/advanced/expert) and highlighting key elements for teacher review.
+
+            **Input Data:**
+            1. RAG CONTEXT (Briefing with possible multi-level objectives):
             {rag_context}
-            
-            TECNOLOGÍAS DETECTADAS EN EL REPOSITORIO:
+
+            2. DETECTED TECHNOLOGIES (JSON):
             {json.dumps(detected_technologies, indent=2, ensure_ascii=False)}
-            
-            ESTADÍSTICAS DEL REPOSITORIO:
+
+            3. REPOSITORY STATISTICS (JSON):
             {json.dumps(repo_stats, indent=2, ensure_ascii=False)}
+
+            **Analysis Instructions:**
+            1. Multi-Level Objective Mapping:
+            - Identify which briefing levels (essential/medium/advanced/expert) are present
+            - Evaluate differentiated compliance by level with concrete evidence
+            - Highlight attempts to reach higher objectives not required (critical positive)
+
+            2. Deep Technical Analysis:
+            - Compare actual architecture vs. expected by complexity level
+            - Evaluate suspicious code patterns (over-engineering or risky simplifications)
+            - Analyze key metrics: coupling, cohesion, cyclomatic complexity
+
+            3. AI Detection with Educational Context:
+            - Look for atypical patterns for students (advanced syntax without conceptual foundation)
+            - Analyze correlation between commit complexity and technical leaps
+            - Calculate probability of AI-generated code with pedagogical indicators
+
+            4. Learning-Oriented Recommendations:
+            - Prioritize improvements that close gaps between achieved vs. expected levels
+            - Point out "technical patches" that demonstrate conceptual misunderstandings
+            - Suggest refactors that strengthen MLOps fundamentals
+
+            **Output Requirements (in Spanish):**
+            Generate the response in Spanish using markdown with this structure:
+
+            1. **Multi-Level Technical Analysis**  
+            - Implemented Architecture vs. Expected by Level
+            - Key Technologies and Objective Compliance
+            - Critical Points of Educational Technical Debt
+
+            2. **Levels of Objectives Achieved**  
+            - ✅❌ Essential: Analysis with specific evidence
+            - ➕/− Medium: Detected partial implementations
+            - ⚠️ Advanced/Expert: Meritorious attempts or conceptual errors
+
+            3. **AI Use and Pedagogical Warning Signs**  
+            - Estimated Probability (%) and Key Patterns
+            - Suspicious Sections (e.g., Complex model without basic data pipeline)
+            - Inconsistencies between Code Complexity and Versioning Practices
+
+            4. **Prioritized Improvements for Technical Maturity**  
+            - Actions to Consolidate Current Level
+            - Preparation for Higher Objectives
+            - Conceptual Errors to Review Urgently
+
+            5. **Elements for Teacher Review**  
+            - Code with High Risk of "Smart Copying"
+            - Implementations that Mask Misunderstanding
+            - Anomalous Metrics (e.g., High test coverage with untestable logic)
+
+            **Critical Approach:**  
+            - Directly relate technical findings to learning stages  
+            - Highlight discrepancies between technical ambition and fundamentals  
+            - Point out both exceptional progress and dangerous shortcuts  
+            - Use concrete examples from the code for each observation  
             
-            INSTRUCCIONES:
-            1. Primero, identifica todas las tecnologías ya presentes en el repositorio basándote en el análisis proporcionado.
-            2. Compara estos con los requisitos técnicos del briefing.
-            3. Al hacer recomendaciones, asegúrate de NO sugerir tecnologías que ya estén siendo utilizadas.
-            
-            Por favor, analiza el repositorio y responde las siguientes preguntas:
-            1. ¿Cumple el repositorio con los requisitos del briefing? ¿Por qué?
-            2. ¿Qué requisitos o funcionalidades faltan por implementar?
-            3. ¿Qué mejoras específicas recomiendas para el proyecto? (NO incluyas tecnologías ya detectadas)
-            
-            Genera una respuesta en español, clara y concisa, en formato de párrafo.
-            Enfócate en los aspectos positivos, negativos y recomendaciones de mejora.
+            Remember to generate the response in Spanish with markdown formatting.
             """
 
             # Get analysis from LLM
