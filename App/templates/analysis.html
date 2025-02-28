@@ -188,7 +188,7 @@
         <!-- Download PDF Button -->
         {% if analysis_available %}
         <div class="text-center mt-4">
-            <a href="{% static 'reports/'|add:pdf_filename %}" 
+            <a href="{% url 'download_pdf' pdf_filename %}" 
                class="btn btn-primary" 
                download>
                 <i class="fas fa-download"></i> Descargar Informe en PDF

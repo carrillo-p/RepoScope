@@ -209,3 +209,18 @@ def download_csv(request, filename):
     except Exception as e:
         logger.error(f"Error al descargar el archivo {filename}: {str(e)}")
         raise Http404("Error al descargar el archivo")
+    
+def download_pdf(request, filename):
+    """Vista para descargar archivos PDF"""
+    try:
+        file_path = os.path.join('static/reports', filename)
+        if os.path.exists(file_path):
+            response = FileResponse(open(file_path, 'rb'), content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename}"'
+            return response
+        else:
+            logger.error(f"PDF file not found: {file_path}")
+            raise Http404("El archivo PDF no existe")
+    except Exception as e:
+        logger.error(f"Error al descargar el PDF {filename}: {str(e)}")
+        raise Http404("Error al descargar el archivo PDF")
