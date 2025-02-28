@@ -205,7 +205,7 @@ class GitHubRAGAnalyzer:
             - Suggest refactors that strengthen MLOps fundamentals
 
             **Output Requirements (in Spanish):**
-            Generate the response in Spanish using markdown with this structure:
+            Generate the response translated to Spanish, using markdown with this structure as reference on how to output the analysis:
 
             1. **Multi-Level Technical Analysis**  
             - Implemented Architecture vs. Expected by Level
@@ -237,8 +237,6 @@ class GitHubRAGAnalyzer:
             - Highlight discrepancies between technical ambition and fundamentals  
             - Point out both exceptional progress and dangerous shortcuts  
             - Use concrete examples from the code for each observation  
-            
-            Remember to generate the response in Spanish with markdown formatting.
             """
 
             # Get analysis from LLM
@@ -252,6 +250,90 @@ class GitHubRAGAnalyzer:
                 
                 # Clean and encode the response
                 cleaned_analysis = analysis.encode('utf-8', errors='ignore').decode('utf-8').strip()
+
+                required_sections = [
+                {
+                    "number": "1", 
+                    "keywords": [
+                        # Spanish keywords
+                        "análisis", "técnico", "multinivel", "analisis",
+                        # English keywords  
+                        "analysis", "technical", "multilevel", "multi-level"
+                    ]
+                },
+                {
+                    "number": "2", 
+                    "keywords": [
+                        # Spanish keywords
+                        "niveles", "objetivos", "alcanzados", "logrados",
+                        # English keywords
+                        "levels", "objectives", "achieved", "goals", "reached"
+                    ]
+                },
+                {
+                    "number": "3", 
+                    "keywords": [
+                        # Spanish keywords
+                        "uso", "ia", "señales", "alerta", "pedagógica", "pedagogica", "ai", 
+                        # English keywords
+                        "use", "ai", "signs", "warning", "pedagogical", "educational"
+                    ]
+                },
+                {
+                    "number": "4", 
+                    "keywords": [
+                        # Spanish keywords
+                        "mejoras", "priorizadas", "madurez", "técnica", "tecnica", 
+                        # English keywords
+                        "improvements", "prioritized", "maturity", "technical"
+                    ]
+                },
+                {
+                    "number": "5", 
+                    "keywords": [
+                        # Spanish keywords
+                        "elementos", "revisión", "revision", "docente", 
+                        # English keywords
+                        "elements", "review", "teacher", "instructor"
+                    ]
+                }
+            ]
+
+                missing_sections = []
+                for section in required_sections:
+                    # Try multiple formats: "1. Title", "## 1. Title", "1, Title", etc.
+                    section_patterns = [
+                    rf"{section['number']}\.?\s+.*{keyword}" for keyword in section['keywords']
+                ] + [
+                    rf"#+\s*{section['number']}\.?\s+.*{keyword}" for keyword in section['keywords']
+                ]
+                                    
+                    # Check if any pattern matches
+                    found = False
+                    for pattern in section_patterns:
+                        import re
+                        if re.search(pattern.lower(), cleaned_analysis.lower()):
+                            found = True
+                            break
+                    
+                    if not found:
+                        # Store the missing section for later addition
+                        missing_sections.append(section)
+                        self.logger.warning(f"Missing section {section['number']} in analysis")
+                
+                # Add missing sections if needed
+                standard_section_titles = [
+                    "1. Análisis Técnico Multinivel",
+                    "2. Niveles de Objetivos Alcanzados",
+                    "3. Uso de IA y Señales de Alerta Pedagógica",
+                    "4. Mejoras Priorizadas para Madurez Técnica",
+                    "5. Elementos para Revisión Docente"
+                ]
+                
+                for missing in missing_sections:
+                    section_index = int(missing['number']) - 1
+                    cleaned_analysis += f"\n\n## {standard_section_titles[section_index]}\nContenido no generado por el modelo"
+
                 
                 if not cleaned_analysis:
                     raise ValueError("Empty response after cleaning")
