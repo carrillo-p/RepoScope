@@ -251,205 +251,76 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     logger.info("Analyzing repository languages")
     languages_data = []
     
-    if repo_stats and "languages" in repo_stats:
-        logger.info(f"Found languages: {repo_stats['languages']}")
-        languages_data = [
-            {
-                'name': lang['name'],
-                'percentage': lang['percentage'],
-                'color': px.colors.qualitative.Set3[i % len(px.colors.qualitative.Set3)]
-            }
-            for i, lang in enumerate(repo_stats['languages'])
-        ]
-    else:
-        logger.warning("No language data available in repository stats")
+    try:
+        # Obtener los lenguajes del repositorio
+        repo_languages = repo.get_languages()
+        total_lines = sum(repo_languages.values())
+        
+        if repo_languages:
+            logger.info(f"Found languages: {repo_languages}")
+            languages_data = [
+                {
+                    'name': lang,
+                    'percentage': round((lines / total_lines) * 100, 2),
+                    'color': px.colors.qualitative.Set3[i % len(px.colors.qualitative.Set3)]
+                }
+                for i, (lang, lines) in enumerate(repo_languages.items())
+            ]
+            # Ordenar por porcentaje de mayor a menor
+            languages_data.sort(key=lambda x: x['percentage'], reverse=True)
+        else:
+            logger.warning("No languages detected in repository")
+            
+    except Exception as e:
+        logger.error(f"Error analyzing repository languages: {str(e)}")
+        languages_data = []
 
     # 4. Detección de bibliotecas
-    logger.info("Starting library detection")
-
-    def parse_requirement_line(line):
-        """Parse a single requirement line."""
-        line = line.strip()
-        if not line or line.startswith('#'):
-            return None, None
-        
-        # Manejo de diferentes especificadores de versión
-        for operator in ['>=', '==', '<=', '~=', '>', '<']:
-            if operator in line:
-                name, version = line.split(operator, 1)
-                return name.strip().lower(), version.strip()
-        
-        # Handle requirements without version
-        return line.lower(), None
-
-    # Lista de bibliotecas principales a detectar
     libraries_data = []
-    main_libraries = {
-        # Python - Frameworks Web
-            'django', 'flask', 'fastapi', 'pyramid', 'tornado', 'starlette',
-            'aiohttp', 'sanic', 'bottle', 'dash',
-            
-            # Data Analysis
-            'pandas', 'numpy', 'scipy', 'matplotlib', 'seaborn',
-            'plotly', 'bokeh', 'altair', 'streamlit',
-            'statsmodels', 'patsy', 'polars', 'vaex',
-            'ydata-profiling', 'great-expectations',
-            'dask', 'modin', 'koalas',
-            
-            # Data Science & Machine Learning
-            'scikit-learn', 'tensorflow', 'pytorch', 'keras',
-            'xgboost', 'lightgbm', 'catboost', 'rapids',
-            'transformers', 'spacy', 'gensim', 'nltk',
-            'opencv-python', 'pillow', 'scikit-image',
-            'imbalanced-learn', 'optuna', 'hyperopt',
-            'shap', 'lime', 'eli5', 'mlflow',
-            'tensorboard', 'wandb', 'neptune-client',
-            
-            # Data Engineering
-            'apache-airflow', 'prefect', 'dagster', 'luigi',
-            'apache-beam', 'dbt-core', 'great-expectations',
-            'feast', 'kedro', 'petl', 'bonobo',
-            'sqlalchemy', 'alembic', 'psycopg2-binary',
-            'pymongo', 'redis', 'elasticsearch',
-            'pyspark', 'findspark', 'koalas',
-            'kafka-python', 'confluent-kafka', 'faust-streaming',
-            
-            # Big Data & Cloud
-            'boto3', 'google-cloud', 'azure-storage',
-            'snowflake-connector-python', 'databricks-cli',
-            'delta-spark', 'pyarrow', 'fastparquet',
-            'dask', 'ray', 'modin', 'vaex',
-            
-            # Data Quality & Testing
-            'pytest', 'unittest', 'nose', 'hypothesis',
-            'great-expectations', 'pandera', 'cerberus',
-            'faker', 'coverage', 'pylint', 'black',
-            
-            # Data Visualization
-            'plotly', 'bokeh', 'altair', 'seaborn',
-            'matplotlib', 'dash', 'streamlit', 'gradio',
-            'holoviews', 'geoplotlib', 'folium', 'geopandas',
-            
-            # ETL & Data Processing
-            'beautifulsoup4', 'scrapy', 'selenium',
-            'requests', 'aiohttp', 'httpx',
-            'pandas', 'numpy', 'polars', 'dask',
-            'pyarrow', 'fastparquet', 'python-snappy',
-            
-            # Time Series
-            'prophet', 'statsmodels', 'pmdarima',
-            'neuralprophet', 'sktime', 'tslearn',
-            'pyts', 'tsfresh', 'stumpy',
-            
-            # Deep Learning
-            'tensorflow', 'torch', 'keras',
-            'transformers', 'pytorch-lightning',
-            'fastai', 'mxnet', 'jax', 'flax',
-            
-            # MLOps & Deployment
-            'mlflow', 'kubeflow', 'bentoml', 'ray[serve]',
-            'streamlit', 'gradio', 'dash',
-            'fastapi', 'flask', 'docker',
-            'kubernetes', 'seldon-core', 'triton',
-            
-            # Experiment Tracking
-            'mlflow', 'wandb', 'neptune-client',
-            'tensorboard', 'sacred', 'comet-ml',
-            
-            # Feature Stores
-            'feast', 'hopsworks', 'tecton',
-            
-            # Model Monitoring
-            'evidently', 'whylogs', 'arize',
-            'great-expectations', 'deepchecks',
-            
-            # AutoML
-            'auto-sklearn', 'autokeras', 'pycaret',
-            'tpot', 'automl-gs', 'flaml', 'ludwig',
-            
-            # Additional libraries from requirements.txt
-            'python-dotenv', 'pygithub', 'langchain-groq',
-            'langchain-huggingface', 'reportlab', 'pymupdf',
-            'asgiref'
-    }
-
-    # Análisis de requirements.txt
+    logger.info("Starting library detection")
+    
     try:
-        requirements = repo.get_contents("requirements.txt")
-        content = requirements.decoded_content.decode()
-        for line in content.split('\n'):
-            name, version = parse_requirement_line(line)
-            if name and name in main_libraries:
-                lib_entry = {
-                    'name': name,
-                    'version': version if version else 'unspecified',
-                    'type': 'Python'
-                }
-                if lib_entry not in libraries_data:  # Avoid duplicates
-                    libraries_data.append(lib_entry)
+        # Asegurarnos de tener el objeto repo correcto
+        repo_name = analyzer._extract_repo_name(repo_url)
+        repo = analyzer.github.get_repo(repo_name)
+        logger.info(f"Successfully connected to repo: {repo.full_name}")
+        
+        try:
+            # Intentar obtener el archivo requirements.txt
+            requirements = repo.get_contents("requirements.txt")
+            content = requirements.decoded_content.decode('utf-8')
+            logger.info(f"Found requirements.txt with {len(content)} bytes")
+            
+            # Procesar cada línea
+            for line in content.split('\n'):
+                line = line.strip()
+                if line and not line.startswith('#'):
+                    package = line.split('#')[0].strip()
+                    package = package.split('==')[0].split('>=')[0].strip()
+                    if package:
+                        libraries_data.append({
+                            'name': package,
+                            'category': 'Python Package',
+                            'source': 'requirements.txt'
+                        })
+            
+            logger.info(f"Found {len(libraries_data)} libraries")
+            
+        except Exception as e:
+            logger.error(f"Error reading requirements.txt: {str(e)}")
+            
     except Exception as e:
-        logger.warning(f"Error reading requirements.txt: {str(e)}")
-        pass
-
-    logger.info("Analysis completed successfully")
-
-    libraries_data.sort(key=lambda x: (x['type'], x['name']))
-
-    # Crear el contexto final con todas las visualizaciones
+        logger.error(f"Error accessing repository: {str(e)}")
+    
+    # Asegurarnos de que libraries_data esté en el contexto incluso si está vacío
     context = {
         'graphs': {
             'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
             'developer_distribution': fig_authors.to_html(full_html=False, include_plotlyjs=True),
         },
-        'commits_table': commits_table_html,
         'languages': languages_data,
         'libraries': libraries_data
     }
-
-    # Log del contenido del contexto para depuración
-    logger.info("Contenido del contexto generado:")
-    logger.info(f"- Longitud de la tabla de commits: {len(commits_table_html)}")
-    logger.info(f"- Contenido de la tabla: {commits_table_html[:200]}...")  # Ver el inicio de la tabla
-
-    # Análisis de package.json (JavaScript)
-    try:
-        package_json = repo.get_contents("package.json")
-        content = json.loads(package_json.decoded_content.decode())
-        all_deps = {}
-        if 'dependencies' in content:
-            all_deps.update(content['dependencies'])
-        if 'devDependencies' in content:
-            all_deps.update(content['devDependencies'])
-        
-        for lib, version in all_deps.items():
-            lib_name = lib.lower()
-            if lib_name in main_libraries:
-                libraries_data.append({
-                    'name': lib,
-                    'version': version.replace('^', '').replace('~', ''),
-                    'type': 'JavaScript'
-                })
-    except:
-        pass
-
-    # Análisis de composer.json (PHP)
-    try:
-        composer_json = repo.get_contents("composer.json")
-        content = json.loads(composer_json.decoded_content.decode())
-        if 'require' in content:
-            for lib, version in content['require'].items():
-                lib_name = lib.lower()
-                if lib_name in main_libraries:
-                    libraries_data.append({
-                        'name': lib,
-                        'version': version,
-                        'type': 'PHP'
-                    })
-    except:
-        pass
-    
-    # Ordenar bibliotecas por tipo y nombre
-    libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
     return context
 
