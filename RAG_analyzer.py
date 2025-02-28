@@ -52,9 +52,14 @@ class LLMClient:
     def _switch_to_ollama(self) -> bool:
         try:
             callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+            # Get the Ollama host from environment variable or use default
+            ollama_host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+            self.logger.info(f"Connecting to Ollama at: {ollama_host}")
+            
             self.llm = Ollama(
                 model=self.ollama_model,
-                callback_manager=callback_manager
+                callback_manager=callback_manager,
+                base_url=ollama_host  # Use the environment variable here
             )
             self.using_ollama = True
             self.logger.info(f"Switched to Ollama model: {self.ollama_model}")
