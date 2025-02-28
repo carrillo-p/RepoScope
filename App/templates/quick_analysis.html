@@ -6,6 +6,9 @@
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
+<!-- Font Awesome -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
 <!-- DataTables con Bootstrap 5 -->
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css">
 <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/buttons/2.2.2/css/buttons.bootstrap5.min.css">
@@ -50,13 +53,18 @@
             {% csrf_token %}
             <div class="form-group">
                 <label for="repo_url">URL del Repositorio</label>
-                <input type="url" 
-                       class="form-control" 
-                       id="repo_url" 
-                       name="repo_url"
-                       placeholder="https://github.com/usuario/repositorio"
-                       required
-                       value="{{ request.POST.repo_url }}">
+                <div class="input-group">
+                    <input type="url" 
+                           class="form-control" 
+                           id="repo_url" 
+                           name="repo_url"
+                           placeholder="https://github.com/usuario/repositorio"
+                           required
+                           value="{{ request.POST.repo_url }}">
+                    <button type="button" class="btn btn-outline-secondary" onclick="clearUrl()">
+                        ×
+                    </button>
+                </div>
                 <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
             </div>
             
@@ -164,19 +172,19 @@
                         <h3 class="card-title">Librerías Principales Detectadas</h3>
                         {% if libraries %}
                             <div class="libraries-container">
-                                {% regroup libraries by type as library_list %}
-                                {% for type in library_list %}
+                                {% regroup libraries by category as library_list %}
+                                {% for category in library_list %}
                                     <div class="library-type mb-3">
-                                        <h4 class="h6 mb-2">{{ type.grouper }}</h4>
+                                        <h4 class="h6 mb-2">{{ category.grouper }}</h4>
                                         <div class="row">
-                                            {% for lib in type.list %}
+                                            {% for lib in category.list %}
                                             <div class="col-md-6 mb-2">
                                                 <div class="library-card p-2 border rounded">
                                                     <div class="d-flex align-items-center">
                                                         <i class="fas fa-cube me-2"></i>
                                                         <span class="library-name">{{ lib.name }}</span>
-                                                        {% if lib.version %}
-                                                        <span class="library-version ms-auto badge bg-secondary">{{ lib.version }}</span>
+                                                        {% if lib.source %}
+                                                        <span class="library-version ms-auto badge bg-secondary">{{ lib.source }}</span>
                                                         {% endif %}
                                                     </div>
                                                 </div>
@@ -217,6 +225,11 @@ window.onload = function() {
             errorDiv.style.display = 'none';
         }
     }
+}
+
+function clearUrl() {
+    document.getElementById('repo_url').value = '';
+    document.getElementById('repo_url').focus();
 }
 </script>
 

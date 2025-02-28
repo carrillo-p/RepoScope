@@ -29,19 +29,50 @@ VISUALIZATION_CONFIG = {
 
 # Bibliotecas principales a detectar
 MAIN_LIBRARIES = {
-    'python': [
-        'django', 'flask', 'fastapi', 'pandas', 'numpy',
-        'tensorflow', 'pytorch', 'scikit-learn', 'matplotlib',
-        'seaborn', 'plotly', 'requests', 'beautifulsoup4'
-    ],
-    'javascript': [
-        'react', 'vue', 'angular', 'express', 'next',
-        'nuxt', 'gatsby', 'jest', 'mocha', 'chai'
-    ],
-    'php': [
-        'laravel', 'symfony', 'wordpress', 'phpunit',
-        'composer', 'guzzle', 'monolog'
-    ]
+    # Python - Frameworks Web
+    'django', 'flask', 'fastapi', 'pyramid', 'tornado', 'starlette',
+    'aiohttp', 'sanic', 'bottle', 'dash',
+    
+    # Data Analysis
+    'pandas', 'numpy', 'scipy', 'matplotlib', 'seaborn',
+    'plotly', 'bokeh', 'altair', 'streamlit',
+    'statsmodels', 'patsy', 'polars', 'vaex',
+    'ydata-profiling', 'great-expectations',
+    'dask', 'modin', 'koalas',
+    
+    # Data Science & Machine Learning
+    'scikit-learn', 'tensorflow', 'pytorch', 'keras',
+    'xgboost', 'lightgbm', 'catboost', 'rapids',
+    'transformers', 'spacy', 'gensim', 'nltk',
+    'opencv-python', 'pillow', 'scikit-image',
+    'imbalanced-learn', 'optuna', 'hyperopt',
+    'shap', 'lime', 'eli5', 'mlflow',
+    'tensorboard', 'wandb', 'neptune-client',
+    
+    # Data Engineering & Web
+    'apache-airflow', 'prefect', 'dagster', 'luigi',
+    'apache-beam', 'dbt-core', 'great-expectations',
+    'feast', 'kedro', 'petl', 'bonobo',
+    'sqlalchemy', 'alembic', 'psycopg2-binary',
+    'pymongo', 'redis', 'elasticsearch',
+    'pyspark', 'findspark', 'koalas',
+    'kafka-python', 'confluent-kafka', 'faust-streaming',
+    'requests', 'beautifulsoup4', 'selenium', 'scrapy',
+    'httpx', 'aiohttp', 'fastapi', 'django',
+    
+    # Development & Testing
+    'pytest', 'unittest', 'nose', 'hypothesis',
+    'black', 'flake8', 'pylint', 'mypy',
+    'coverage', 'tox', 'pre-commit',
+    
+    # Utilities & Others
+    'python-dotenv', 'pyyaml', 'toml', 'click',
+    'typer', 'rich', 'tqdm', 'loguru',
+    'pygithub', 'gitpython', 'python-jose',
+    'passlib', 'bcrypt', 'cryptography',
+    'reportlab', 'pymupdf', 'asgiref',
+    'langchain', 'openai', 'transformers',
+    'pillow', 'opencv-python', 'numpy'
 }
 
 # Configuración de análisis
