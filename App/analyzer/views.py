@@ -397,6 +397,7 @@ def quick_analysis(request):
             # Análisis de lenguajes y estadísticas
             repo_stats = analyzer.get_repo_stats(repo_url)
             languages_data = []
+            libraries_data = []
             
             if repo_stats and "languages" in repo_stats:
                 languages_data = repo_stats['languages']
