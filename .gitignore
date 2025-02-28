@@ -169,3 +169,17 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Archivos que se crean en el directorio
+cloned_repo/
+github_stats/
+reports/
+
+# Añadir estas líneas
+.env
+*.pyc
+__pycache__/
+db.sqlite3
+staticfiles/
+media/
+.DS_Store

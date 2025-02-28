@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  ollama:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    restart: always
+
+  web:
+    build: .
+    container_name: web_app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    working_dir: /app/App
+    environment:
+      - PYTHONUNBUFFERED=1
+      - OLLAMA_HOST=http://ollama:11434  # Configura la conexión con Ollama
+    depends_on:
+      - ollama  # Se asegura de que Ollama esté listo antes de iniciar la app
+    command: >      
+      sh -c "
+      echo 'Esperando a que Ollama esté listo...' && 
+      while ! curl -s http://ollama:11434/api/tags; do sleep 2; done && 
+      echo 'Ollama está listo. Descargando el modelo...' && 
+      curl -X POST http://ollama:11434/api/pull -d '{\"name\": \"mistral\"}' && 
+      python manage.py runserver 0.0.0.0:8000"

@@ -1,0 +1,255 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Análisis Detallado - RepoScope{% endblock %}
+
+{% block content %}
+<div class="analysis-section">
+    <div class="repo-form">
+        <h1 class="quick-analysis-title mb-4">Análisis Detallado de Repositorio</h1>
+        
+        <form method="POST" action="{% url 'analysis' %}" enctype="multipart/form-data" onsubmit="showLoader()">
+            {% csrf_token %}
+            <div class="form-group">
+                <label for="repo_url">URL del Repositorio</label>
+                <div class="input-group">
+                    <input type="url" 
+                           class="form-control" 
+                           id="repo_url" 
+                           name="repo_url"
+                           placeholder="https://github.com/usuario/repositorio"
+                           required
+                           value="{{ request.POST.repo_url }}">
+                    <span class="input-group-text clear-input" 
+                          onclick="clearUrl()" 
+                          style="cursor: pointer;">
+                        ×
+                    </span>
+                </div>
+                <small class="form-text">Ejemplo: https://github.com/usuario/repositorio</small>
+            </div>
+            
+            <div class="form-group">
+                <label for="briefing">Archivo Briefing (PDF)</label>
+                <input type="file" 
+                       class="form-control" 
+                       id="briefing" 
+                       name="briefing"
+                       accept=".pdf">
+                <small class="form-text">Sube un archivo PDF con requisitos específicos</small>
+            </div>
+            
+            <div class="text-center">
+                <button type="submit" class="btn btn-primary">Analizar</button>
+                
+                <!-- Animación de carga -->
+                <div id="duck-animation" style="display: none;">
+                    <img src="{% static 'images/XOsX.gif' %}" alt="" width="150" class="mt-4">
+                    <p class="mt-2">Analizando repositorio...</p>
+                </div>
+
+                <!-- Animación y mensaje de error -->
+                {% if messages and not analysis_available %}
+                <div class="error-animation mt-3">
+                    <img src="{% static 'images/6oa.gif' %}" alt="Error" width="150">
+                    {% for message in messages %}
+                    <div class="alert alert-danger mt-2">
+                        {{ message }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+
+    <!-- Sección de resultados -->
+    <div class="results-section" id="results">
+        <!-- Commits totales -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Commits Totales</h5>
+            </div>
+            <div class="card-body">
+                <p>Total Commits: {{ repo_data.commit_count }}</p>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Distribución de Commits por Desarrollador</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group">
+                    {% for contributor, count in repo_data.contributors.items %}
+                    <li class="list-group-item">
+                        <strong>{{ contributor }}:</strong> {{ count }} commits
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <!-- Languages section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Lenguajes Utilizados</h5>
+            </div>
+            <div class="card-body">
+                {% if repo_data.languages %}
+                    <ul class="list-group">
+                        {% for lang in repo_data.languages %}
+                            <li class="list-group-item">
+                                <strong>{{ lang.name }}:</strong> {{ lang.percentage }}%
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted">No se encontraron datos de lenguajes</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Commits por Ramas section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5>Commits por Ramas y Colaboradores</h5>
+            </div>
+            <div class="card-body">
+                {% if commit_analysis %}
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Rama</th>
+                                    <th>Autor</th>
+                                    <th>Commits</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in commit_analysis %}
+                                    <tr>
+                                        <td>{{ row.Branch }}</td>
+                                        <td>{{ row.Author }}</td>
+                                        <td>{{ row.Commits }}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <p class="text-muted">No se encontraron datos de commits por rama</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Compliance Report Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2>Informe de Cumplimiento</h2>
+            </div>
+            <div class="card-body">
+                {% if analysis_available %}
+                    {% if tier_analysis %}
+                        <div class="analysis-content">
+                            <!-- Structured Analysis -->
+                            <h3>Evaluación General</h3>
+                            
+                            {% if tier_analysis.evaluacion_general_html %}
+                                <div class="markdown-content">{{ tier_analysis.evaluacion_general_html|safe }}</div>
+                            {% elif structured_analysis %}
+                                {% for section in structured_analysis %}
+                                    <div class="analysis-section mb-4">
+                                        <h4 class="section-title">{{ section.title }}</h4>
+                                        
+                                        {% for item in section.content %}
+                                            {% if item.type == 'subheader' %}
+                                                <h5 class="mt-3">{{ item.text }}</h5>
+                                            {% elif item.type == 'paragraph' %}
+                                                <p>{{ item.text }}</p>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                {% endfor %}
+                            {% else %}
+                                <pre class="analysis-content">{{ tier_analysis.evaluacion_general }}</pre>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">El informe no está disponible actualmente.</p>
+                    {% endif %}
+                {% else %}
+                    <p class="text-muted">El informe no está disponible actualmente.</p>
+                {% endif %}
+            </div>
+        </div>    
+
+
+        <!-- Download PDF Button -->
+        {% if analysis_available %}
+        <div class="text-center mt-4">
+            <a href="{% static 'reports/'|add:pdf_filename %}" 
+               class="btn btn-primary" 
+               download>
+                <i class="fas fa-download"></i> Descargar Informe en PDF
+            </a>
+        </div>
+    {% endif %}
+    </div>
+</div>
+
+<!-- Script para manejar las animaciones -->
+<script>
+function showLoader() {
+    const form = document.querySelector('form');
+    if (form.checkValidity()) {
+        // Ocultar mensaje de error si existe
+        const errorDiv = document.querySelector('.error-animation');
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+        }
+        // Mostrar animación de carga
+        document.getElementById('duck-animation').style.display = 'block';
+    }
+}
+
+// Solo resetear formulario cuando el análisis sea exitoso
+window.onload = function() {
+    // Verificar si tenemos resultados exitosos
+    const hasSuccessfulAnalysis = document.querySelector('.analysis-content');
+    if (hasSuccessfulAnalysis) {
+        // Resetear el formulario solo si el análisis fue exitoso
+        document.querySelector('form').reset();
+    }
+}
+
+function clearUrl() {
+    document.getElementById('repo_url').value = '';
+    document.getElementById('repo_url').focus();
+}
+</script>
+
+{% if messages %}
+<div class="messages">
+    {% for message in messages %}
+    <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-warning{% endif %}">
+        {{ message }}
+        {% if 'conexión' in message.message|lower %}
+        <div class="mt-2 small">
+            <strong>Sugerencias:</strong>
+            <ul>
+                <li>Verifique que el servicio Ollama esté ejecutándose</li>
+                <li>Intente reiniciar el servicio Ollama</li>
+                <li>Compruebe su conexión a internet</li>
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %} 
