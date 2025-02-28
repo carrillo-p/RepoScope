@@ -1,19 +1,12 @@
 from django.shortcuts import render
 import plotly.express as px
 import plotly.graph_objects as go
-from django.http import JsonResponse, FileResponse, Http404
+from django.http import FileResponse, Http404
 import pandas as pd
-from django.contrib import messages
-import json
 import sys
 import os
 import logging
-from .constants import (
-    QUICK_ANALYSIS_ERROR_MESSAGES, 
-    VISUALIZATION_CONFIG,
-    MAIN_LIBRARIES,
-    ANALYSIS_SETTINGS
-)
+
 import time
 import shutil
 root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -21,108 +14,6 @@ sys.path.append(root_dir)
 from github_getter import GitHubAnalyzer
 
 logger = logging.getLogger('repo_analyzer.views')
-
-def quick_analysis(request):
-    """Vista para el análisis rápido del repositorio"""
-    if request.method == 'POST':
-        repo_url = request.POST.get('repo_url')
-        
-        if not repo_url:
-            messages.error(request, QUICK_ANALYSIS_ERROR_MESSAGES['url_required'])
-            return render(request, 'quick_analysis.html')
-            
-        try:
-            # Inicialización del analizador de GitHub
-            logger.info("Initializing GitHub analyzer")
-            analyzer = GitHubAnalyzer()
-            repo = analyzer.github.get_repo(analyzer._extract_repo_name(repo_url))
-            
-            # Obtención de commits y autores de todas las ramas
-            branches = repo.get_branches()
-            all_commits = []
-            commit_authors = []
-
-            # Análisis de commits por rama
-            for branch in branches[:ANALYSIS_SETTINGS['max_branches_analyze']]:
-                try:
-                    branch_commits = repo.get_commits(
-                        sha=branch.name, 
-                        since=pd.Timestamp.now() - pd.Timedelta(days=ANALYSIS_SETTINGS['commit_analysis_days'])
-                    )
-                    for commit in branch_commits:
-                        if commit.sha not in [c.sha for c in all_commits]:
-                            # Obtener el commit completo con todos los detalles y archivos
-                            detailed_commit = repo.get_commit(commit.sha)
-                            
-                            # Verificar que tenemos acceso a los archivos
-                            if hasattr(detailed_commit, 'files'):
-                                all_commits.append(detailed_commit)
-                                author = (detailed_commit.author.login if detailed_commit.author 
-                                         else detailed_commit.commit.author.email or detailed_commit.commit.author.name)
-                                commit_authors.append(author)
-                                
-                                # Debug log
-                                logger.info(f"""
-                                Commit details:
-                                SHA: {detailed_commit.sha[:7]}
-                                Author: {author}
-                                Files: {len(detailed_commit.files)}
-                                Has patches: {any(hasattr(f, 'patch') for f in detailed_commit.files)}
-                                """)
-                except Exception as e:
-                    logger.warning(f"Error al analizar rama {branch.name}: {e}")
-                    continue
-
-            # Verificación de commits encontrados
-            if not all_commits:
-                messages.warning(request, QUICK_ANALYSIS_ERROR_MESSAGES['no_commits'])
-                return render(request, 'quick_analysis.html')
-
-            # Añadir debug
-            for commit in all_commits[:5]:  # Primeros 5 commits
-                detailed_commit = commit.repository.get_commit(commit.sha)
-                logger.info(f"""
-                Commit: {commit.sha[:7]}
-                Author: {commit.author.login if commit.author else 'None'}
-                Stats available: {hasattr(detailed_commit, 'stats')}
-                Additions: {detailed_commit.stats.additions if hasattr(detailed_commit, 'stats') else 'N/A'}
-                Deletions: {detailed_commit.stats.deletions if hasattr(detailed_commit, 'stats') else 'N/A'}
-                """)
-
-            # Debug de los primeros commits
-            for commit in all_commits[:3]:
-                try:
-                    url = commit.url
-                    response = commit._requester.requestJson("GET", url)[0]
-                    logger.info(f"""
-                    Debug - Commit API Response:
-                    URL: {url}
-                    Has stats: {'stats' in response}
-                    Stats: {response.get('stats', 'No stats available')}
-                    """)
-                except Exception as e:
-                    logger.error(f"Error getting commit data: {str(e)}")
-
-            # Crear visualizaciones y análisis
-            context = create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url)
-            
-            # Debug después de crear el contexto
-            logger.info("Debug: Verificando contexto")
-            logger.info(f"Graphs keys: {context['graphs'].keys()}")
-
-            
-            return render(request, 'quick_analysis.html', context)
-                
-        except Exception as e:
-            logger.error(f"Error en análisis rápido: {e}")
-            error_message = QUICK_ANALYSIS_ERROR_MESSAGES.get(
-                str(e).lower().replace(' ', '_'),
-                QUICK_ANALYSIS_ERROR_MESSAGES['general_error']
-            )
-            messages.error(request, error_message)
-            return render(request, 'quick_analysis.html')
-    
-    return render(request, 'quick_analysis.html')
 
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
