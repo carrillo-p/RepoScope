@@ -276,80 +276,43 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         languages_data = []
 
     # 4. Detección de bibliotecas
-    logger.info("Starting library detection")
     libraries_data = []
+    logger.info("Starting library detection")
     
     try:
-        # Obtener estadísticas del repositorio usando GitHubAnalyzer
-        repo_stats = analyzer.get_repo_stats(repo_url)
+        # Asegurarnos de tener el objeto repo correcto
+        repo_name = analyzer._extract_repo_name(repo_url)
+        repo = analyzer.github.get_repo(repo_name)
+        logger.info(f"Successfully connected to repo: {repo.full_name}")
         
-        # Intentar extraer el texto de los archivos Python
-        repo_path = analyzer.clone_repo(repo_url)
-        if repo_path:
-            python_files = []
-            for root, _, files in os.walk(repo_path):
-                for file in files:
-                    if file.endswith('.py'):
-                        file_path = os.path.join(root, file)
-                        try:
-                            with open(file_path, 'r', encoding='utf-8') as f:
-                                content = f.read()
-                                # Buscar imports
-                                for line in content.split('\n'):
-                                    line = line.strip()
-                                    if line.startswith('import ') or line.startswith('from '):
-                                        # Extraer nombre de la librería
-                                        if line.startswith('import '):
-                                            lib = line.split()[1].split('.')[0]
-                                        else:
-                                            lib = line.split()[1].split('.')[0]
-                                        
-                                        # Evitar duplicados y módulos internos
-                                        if (lib not in [l['name'] for l in libraries_data] and 
-                                            not any(lib.startswith(f) for f in ['_', '.'])):
-                                            libraries_data.append({
-                                                'name': lib,
-                                                'type': 'Python',
-                                                'source': os.path.basename(file_path)
-                                            })
-                        except Exception as e:
-                            logger.warning(f"Error reading file {file_path}: {e}")
-            
-            # Limpiar el directorio clonado
-            import shutil
-            shutil.rmtree(repo_path)
-            
-        # Buscar requirements.txt en el repositorio
         try:
+            # Intentar obtener el archivo requirements.txt
             requirements = repo.get_contents("requirements.txt")
-            content = requirements.decoded_content.decode()
+            content = requirements.decoded_content.decode('utf-8')
+            logger.info(f"Found requirements.txt with {len(content)} bytes")
+            
+            # Procesar cada línea
             for line in content.split('\n'):
                 line = line.strip()
                 if line and not line.startswith('#'):
                     package = line.split('#')[0].strip()
-                    package = package.split('==')[0].split('>=')[0].split('<=')[0].strip()
-                    if package and package not in [l['name'] for l in libraries_data]:
+                    package = package.split('==')[0].split('>=')[0].strip()
+                    if package:
                         libraries_data.append({
                             'name': package,
-                            'type': 'Python',
+                            'category': 'Python Package',
                             'source': 'requirements.txt'
                         })
-        except:
-            logger.warning("No requirements.txt found")
             
-        logger.info(f"Found {len(libraries_data)} libraries")
-        
+            logger.info(f"Found {len(libraries_data)} libraries")
+            
+        except Exception as e:
+            logger.error(f"Error reading requirements.txt: {str(e)}")
+            
     except Exception as e:
-        logger.error(f"Error in library detection: {str(e)}")
+        logger.error(f"Error accessing repository: {str(e)}")
     
-    # Ordenar bibliotecas por nombre
-    libraries_data.sort(key=lambda x: x['name'])
-
-    logger.info("Analysis completed successfully")
-
-    libraries_data.sort(key=lambda x: (x['type'], x['name']))
-
-    # Crear el contexto final con todas las visualizaciones
+    # Asegurarnos de que libraries_data esté en el contexto incluso si está vacío
     context = {
         'graphs': {
             'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
@@ -358,47 +321,6 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         'languages': languages_data,
         'libraries': libraries_data
     }
-
-
-    # Análisis de package.json (JavaScript)
-    try:
-        package_json = repo.get_contents("package.json")
-        content = json.loads(package_json.decoded_content.decode())
-        all_deps = {}
-        if 'dependencies' in content:
-            all_deps.update(content['dependencies'])
-        if 'devDependencies' in content:
-            all_deps.update(content['devDependencies'])
-        
-        for lib, version in all_deps.items():
-            lib_name = lib.lower()
-            if lib_name in MAIN_LIBRARIES:
-                libraries_data.append({
-                    'name': lib,
-                    'version': version.replace('^', '').replace('~', ''),
-                    'type': 'JavaScript'
-                })
-    except:
-        pass
-
-    # Análisis de composer.json (PHP)
-    try:
-        composer_json = repo.get_contents("composer.json")
-        content = json.loads(composer_json.decoded_content.decode())
-        if 'require' in content:
-            for lib, version in content['require'].items():
-                lib_name = lib.lower()
-                if lib_name in MAIN_LIBRARIES:
-                    libraries_data.append({
-                        'name': lib,
-                        'version': version,
-                        'type': 'PHP'
-                    })
-    except:
-        pass
-    
-    # Ordenar bibliotecas por tipo y nombre
-    libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
     return context
 
