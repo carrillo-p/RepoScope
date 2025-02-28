@@ -91,31 +91,26 @@ def generate_pdf_report(analysis_results, briefing_name):
             spaceAfter=12
         )
         
-        bullet_style = ParagraphStyle(
-            'CustomBullet',
+        section_title_style = ParagraphStyle(
+            'SectionTitle',
+            parent=styles['Heading3'],
+            fontSize=12,
+            textColor=Color(0, 0, 0.5),
+            spaceAfter=15)
+        
+        subsection_style = ParagraphStyle(
+            'Subsection',
             parent=styles['Normal'],
-            fontSize=11,
-            leading=14,
+            fontSize=10,
+            textColor=Color(0.2, 0.2, 0.2),
             leftIndent=20,
-            spaceAfter=10
-        )
+            spaceAfter=10)
 
         # Contenido del documento
         story = []
         
         # Título del informe
         story.append(Paragraph("Informe de Análisis por Niveles", title_style))
-        
-        # Tipo de proyecto
-        project_type_map = {
-            'ml': 'Machine Learning',
-            'nlp': 'Procesamiento de Lenguaje Natural',
-            'genai': 'IA Generativa'
-        }
-        story.append(Paragraph(
-            f"Tipo de Proyecto: {project_type_map.get(analysis_results['project_type'], 'N/A')}", 
-            heading_style
-        ))
         
         # Estadísticas del repositorio
         repo_stats = analysis_results['repository_stats']
@@ -124,15 +119,33 @@ def generate_pdf_report(analysis_results, briefing_name):
             f"Total Commits: {repo_stats['commit_count']}", 
             normal_style
         ))
-        story.append(Paragraph(
-            f"Lenguajes: {', '.join([f'{l['name']} ({l['percentage']}%)' for l in repo_stats['languages']])}", 
-            normal_style
-        ))
+        story.append(Paragraph("Análisis Completo", heading_style))
         
-        # Análisis por niveles
-        story.append(Paragraph("2. Análisis del Repositorio", heading_style))
-        analysis_text = analysis_results.get('tier_analysis', {}).get('evaluacion_general', 'No se generó análisis')
-        story.append(Paragraph(analysis_text, normal_style))
+        # Simplemente tomar el texto crudo y dividirlo por líneas
+        raw_text = analysis_results['tier_analysis']['evaluacion_general']
+        
+        # Procesar cada línea del texto
+        for line in raw_text.split('\n'):
+            if not line.strip():
+                continue
+                
+            # Detectar encabezados básicos por el número de #
+            if line.startswith('# '):
+                story.append(Paragraph(line[2:], styles['Heading1']))
+            elif line.startswith('## '):
+                story.append(Paragraph(line[3:], styles['Heading2']))
+            elif line.startswith('### '):
+                story.append(Paragraph(line[4:], styles['Heading3']))
+            elif line.startswith('- ') or line.startswith('* '):
+                # Bullet point
+                story.append(Paragraph('• ' + line[2:], 
+                    ParagraphStyle('bullet', parent=normal_style, leftIndent=20)))
+            else:
+                # Texto normal
+                story.append(Paragraph(line, normal_style))
+            
+            # Añadir un pequeño espacio después de cada línea
+            story.append(Spacer(1, 5))
 
         # Construir el documento
         doc.build(story)
@@ -141,6 +154,35 @@ def generate_pdf_report(analysis_results, briefing_name):
     except Exception as e:
         logging.error(f"Error generating PDF report: {e}")
         return None
+    
+def parse_markdown_analysis(markdown_content):
+    """Helper to structure markdown analysis for template"""
+    sections = []
+    current_section = {}
+    
+    for line in markdown_content.split('\n'):
+        if line.startswith('## '):
+            if current_section:
+                sections.append(current_section)
+            current_section = {
+                'title': line[3:].strip(),
+                'content': []
+            }
+        elif line.startswith('### '):
+            current_section['content'].append({
+                'type': 'subheader',
+                'text': line[4:].strip()
+            })
+        elif line.strip() and current_section:
+            current_section['content'].append({
+                'type': 'paragraph',
+                'text': line.strip()
+            })
+    
+    if current_section:
+        sections.append(current_section)
+    
+    return sections
 
 def analysis(request):
     """
@@ -243,6 +285,8 @@ def analysis(request):
                     "pdf_path": f"static/reports/{os.path.basename(pdf_path)}",
                     "analysis_available": True,
                     "commit_analysis": analysis_results["repository_stats"].get("commit_analysis", []),
+                    "structured_analysis": parse_markdown_analysis(
+                        analysis_results["tier_analysis"]["evaluacion_general"]),
                     "pdf_filename": pdf_name  # Usamos el nombre formateado
                 }
 
@@ -353,6 +397,7 @@ def quick_analysis(request):
             # Análisis de lenguajes y estadísticas
             repo_stats = analyzer.get_repo_stats(repo_url)
             languages_data = []
+            libraries_data = []
             
             if repo_stats and "languages" in repo_stats:
                 languages_data = repo_stats['languages']

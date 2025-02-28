@@ -127,6 +127,8 @@ def quick_analysis(request):
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
 
+    repo_stats = analyzer.get_repo_stats(repo_url)
+
     # 1. Primero crear las gráficas de actividad y distribución
     logger.info("Generating commit activity visualization")
     
@@ -344,6 +346,8 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
     libraries_data.sort(key=lambda x: x['name'])
 
     logger.info("Analysis completed successfully")
+
+    libraries_data.sort(key=lambda x: (x['type'], x['name']))
 
     # Crear el contexto final con todas las visualizaciones
     context = {

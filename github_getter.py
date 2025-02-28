@@ -269,17 +269,22 @@ class GitHubAnalyzer:
                 os.system(f"rd /s /q {target_dir}")  # Comando Windows
 
             # Obtener repositorio y sus contenidos
-            repo = self.github.get_repo(self._extract_repo_name(repo_url))
-            contents = repo.get_contents("")
-            os.makedirs(target_dir, exist_ok=True)
+            clone_command = f"git clone {repo_url} {target_dir}"
+            os.system(clone_command)
+
+            if not os.path.exists(target_dir):
+                # Fallback al método anterior si git clone falla
+                repo = self.github.get_repo(self._extract_repo_name(repo_url))
+                contents = repo.get_contents("")
+                os.makedirs(target_dir, exist_ok=True)
             
             # Clonar archivos y directorios
-            for content in contents:
-                if content.type == "dir":
-                    os.makedirs(os.path.join(target_dir, content.path), exist_ok=True)
-                elif content.type == "file":
-                    with open(os.path.join(target_dir, content.path), 'wb') as f:
-                        f.write(content.decoded_content)
+                for content in contents:
+                    if content.type == "dir":
+                        os.makedirs(os.path.join(target_dir, content.path), exist_ok=True)
+                    elif content.type == "file":
+                        with open(os.path.join(target_dir, content.path), 'wb') as f:
+                            f.write(content.decoded_content)
 
             self.logger.info(f"Clonado exitosamente {repo_url} en {target_dir}")
             return target_dir
