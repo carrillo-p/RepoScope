@@ -37,19 +37,26 @@ El **Analizador de Repositorios GitHub Potenciado por IA** es una herramienta av
 - Procesa y analiza el contenido del repositorio
 - Genera informes detallados de cumplimiento técnico
 
-### 2. github_getter.py
+### 2. RAG_process.py
+- Filtra archivos relevantes del repositorio.
+- Detecta tecnologías utilizadas en el repositorio.
+- Genera embeddings para el contenido del repositorio y el briefing.
+- Permite realizar búsquedas semánticas en el contenido procesado.
+
+
+### 3. github_getter.py
 - Maneja la interacción con la API de GitHub
 - Extrae estadísticas detalladas del repositorio
 - Analiza commits, contribuciones y lenguajes
 - Genera visualizaciones de actividad del repositorio
 
-### 3. briefing_analyzer.py
+### 4. briefing_analyzer.py
 - Procesa y analiza documentos de briefing
 - Utiliza embeddings para comparar requisitos con implementación
 - Evalúa el cumplimiento de objetivos técnicos
 - Genera métricas de conformidad
 
-### 4. Interfaz Web (views.py)
+### 5. Interfaz Web (views.py)
 - Proporciona una interfaz interactiva para el análisis
 - Permite análisis rápidos y detallados
 - Genera visualizaciones interactivas con Plotly
