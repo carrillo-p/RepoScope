@@ -18,12 +18,13 @@ logger = logging.getLogger('repo_analyzer.views')
 def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, repo_url):
     logger.info(f"Found {len(all_commits)} total commits")
 
+    # Get complete repository statistics using GitHubAnalyzer
     repo_stats = analyzer.get_repo_stats(repo_url)
-
-    # 1. Primero crear las gráficas de actividad y distribución
+    
+    # 1. Generate commit activity visualization
     logger.info("Generating commit activity visualization")
     
-    # Generación de visualización de actividad
+    # Commitment activity data preparation
     commit_data = pd.DataFrame({
         'fecha': [c.commit.author.date.date() for c in all_commits],
         'autor': commit_authors,
@@ -31,16 +32,16 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         'cantidad': 1
     })
 
-    # Creación de gráfica de actividad
+    # Activity chart creation
     fig_activity = go.Figure()
     colors = px.colors.qualitative.Set1
 
-    # Generación de series temporales por autor
+    # Time series generation by author
     for idx, autor in enumerate(commit_data['autor'].unique()):
         df_autor = commit_data[commit_data['autor'] == autor]
         df_daily = df_autor.groupby('fecha')['cantidad'].sum().reset_index()
         
-        # Completar fechas faltantes
+        # Fill in missing dates
         fecha_min = commit_data['fecha'].min()
         fecha_max = commit_data['fecha'].max()
         todas_fechas = pd.date_range(start=fecha_min, end=fecha_max, freq='D').date
@@ -49,7 +50,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         df_completo = df_completo.merge(df_daily, on='fecha', how='left')
         df_completo['cantidad'] = df_completo['cantidad'].fillna(0)
         
-        # Añadir serie temporal al gráfico
+        # Add time series to chart
         fig_activity.add_trace(
             go.Scatter(
                 x=df_completo['fecha'],
@@ -72,7 +73,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
             )
         )
 
-    # Configuración del layout de la gráfica de actividad
+    # Configure activity chart layout
     fig_activity.update_layout(
         title=f'Actividad de Commits por Desarrollador (Total: {len(all_commits)} commits)',
         xaxis_title="Fecha",
@@ -105,7 +106,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         hovermode='x unified'
     )
 
-    # Generación de gráfica de distribución de desarrolladores
+    # 2. Generate developer distribution chart
     try:
         df_authors = pd.DataFrame(commit_authors, columns=['autor'])
         author_counts = df_authors['autor'].value_counts()
@@ -131,6 +132,7 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
         )
         
     except Exception as e:
+        logger.error(f"Error creating developer distribution chart: {str(e)}")
         fig_authors = go.Figure()
         fig_authors.add_annotation(
             text=f"Error al procesar la distribución de commits: {str(e)}",
@@ -138,79 +140,58 @@ def create_analysis_visualizations(all_commits, commit_authors, repo, analyzer, 
             x=0.5, y=0.5, showarrow=False
         )
 
-    # 3. Análisis de lenguajes
-    logger.info("Analyzing repository languages")
-    languages_data = []
-    
-    try:
-        # Obtener los lenguajes del repositorio
-        repo_languages = repo.get_languages()
-        total_lines = sum(repo_languages.values())
-        
-        if repo_languages:
-            logger.info(f"Found languages: {repo_languages}")
-            languages_data = [
-                {
-                    'name': lang,
-                    'percentage': round((lines / total_lines) * 100, 2),
-                    'color': px.colors.qualitative.Set3[i % len(px.colors.qualitative.Set3)]
-                }
-                for i, (lang, lines) in enumerate(repo_languages.items())
-            ]
-            # Ordenar por porcentaje de mayor a menor
-            languages_data.sort(key=lambda x: x['percentage'], reverse=True)
-        else:
-            logger.warning("No languages detected in repository")
-            
-    except Exception as e:
-        logger.error(f"Error analyzing repository languages: {str(e)}")
-        languages_data = []
+    # 3. Libraries visualization - NEW!
+    libraries_data = repo_stats.get('libraries', [])
+    fig_libraries = go.Figure()
 
-    # 4. Detección de bibliotecas
-    libraries_data = []
-    logger.info("Starting library detection")
-    
     try:
-        # Asegurarnos de tener el objeto repo correcto
-        repo_name = analyzer._extract_repo_name(repo_url)
-        repo = analyzer.github.get_repo(repo_name)
-        logger.info(f"Successfully connected to repo: {repo.full_name}")
-        
-        try:
-            # Intentar obtener el archivo requirements.txt
-            requirements = repo.get_contents("requirements.txt")
-            content = requirements.decoded_content.decode('utf-8')
-            logger.info(f"Found requirements.txt with {len(content)} bytes")
+        if libraries_data:
+            # Group libraries by category
+            libraries_df = pd.DataFrame(libraries_data)
             
-            # Procesar cada línea
-            for line in content.split('\n'):
-                line = line.strip()
-                if line and not line.startswith('#'):
-                    package = line.split('#')[0].strip()
-                    package = package.split('==')[0].split('>=')[0].strip()
-                    if package:
-                        libraries_data.append({
-                            'name': package,
-                            'category': 'Python Package',
-                            'source': 'requirements.txt'
-                        })
+            libraries_df_sorted = libraries_df.sort_values(['category', 'name'])
             
-            logger.info(f"Found {len(libraries_data)} libraries")
+            # Create bar chart of libraries by category
+            fig_libraries = px.bar(
+                libraries_df_sorted,
+                x='category',
+                y='name',
+                color='category',
+                title='Bibliotecas por Categoría',
+                labels={'name': 'Biblioteca', 'category': 'Categoría'},
+                height=max(400, len(libraries_df) * 20),  # Dynamic height based on library count
+                orientation='h'  # Horizontal bars for better readability
+            )
             
-        except Exception as e:
-            logger.error(f"Error reading requirements.txt: {str(e)}")
-            
+            fig_libraries.update_layout(
+                barmode='group',
+                xaxis_title="Categoría",
+                yaxis={'categoryorder': 'total ascending'},
+                showlegend=False
+            )
+        else:
+            fig_libraries.add_annotation(
+                text="No se detectaron bibliotecas en este repositorio",
+                xref="paper", yref="paper",
+                x=0.5, y=0.5, showarrow=False
+            )
     except Exception as e:
-        logger.error(f"Error accessing repository: {str(e)}")
-    
-    # Asegurarnos de que libraries_data esté en el contexto incluso si está vacío
+        logger.error(f"Error creating libraries visualization: {str(e)}")
+        fig_libraries.add_annotation(
+            text=f"Error al visualizar bibliotecas: {str(e)}",
+            xref="paper", yref="paper",
+            x=0.5, y=0.5, showarrow=False
+        )
+
+    # 4. Prepare and return context with all visualizations
     context = {
         'graphs': {
             'commits_activity': fig_activity.to_html(full_html=False, include_plotlyjs=True),
             'developer_distribution': fig_authors.to_html(full_html=False, include_plotlyjs=True),
+            'libraries_distribution': fig_libraries.to_html(full_html=False, include_plotlyjs=True),
         },
-        'languages': languages_data,
-        'libraries': libraries_data
+        'languages': repo_stats.get('languages', []),
+        'libraries': repo_stats.get('libraries', [])
     }
 
     return context

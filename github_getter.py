@@ -228,6 +228,14 @@ class GitHubAnalyzer:
             except Exception as lang_error:
                 self.logger.error(f"Error in language detection: {str(lang_error)}", exc_info=True)
                 languages_data = []
+            
+            # Detección de bibliotecas
+            try:
+                libraries_data = self.detect_libraries(repo)
+                self.logger.info(f"Detected {len(libraries_data)} libraries in the repository")
+            except Exception as lib_error:
+                self.logger.error(f"Error detecting libraries: {str(lib_error)}", exc_info=True)
+                libraries_data = []
 
             # Retornar resultados completos
             return {
@@ -235,6 +243,7 @@ class GitHubAnalyzer:
                 "commit_count": commit_count,
                 "contributors": contributors_data,
                 "languages": languages_data,
+                "libraries": libraries_data,
                 "commit_analysis": grouped_commits_list,
                 "total_additions": total_additions,
                 "total_deletions": total_deletions
@@ -247,6 +256,7 @@ class GitHubAnalyzer:
                 "commit_count": 0,
                 "contributors": {},
                 "languages": [],
+                "libraries": [],
                 "total_additions": 0,
                 "total_deletions": 0
             }
@@ -370,4 +380,96 @@ class GitHubAnalyzer:
             
         except Exception as e:
             self.logger.error(f"Error extracting text from repository: {e}")
+            return []
+    def detect_libraries(self, repo):
+        """
+        Detecta las bibliotecas utilizadas en el repositorio basándose en archivos
+        de dependencias (requirements.txt, package.json, etc.).
+        
+        Args:
+            repo: Objeto de repositorio de GitHub
+            
+        Returns:
+            list: Lista de diccionarios con información de bibliotecas detectadas
+        """
+        libraries_data = []
+        
+        try:
+            # Buscar requirements.txt (Python)
+            try:
+                requirements = repo.get_contents("requirements.txt")
+                content = requirements.decoded_content.decode('utf-8')
+                self.logger.info(f"Found requirements.txt with {len(content)} bytes")
+                
+                for line in content.split('\n'):
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        package = line.split('#')[0].strip()
+                        package = package.split('==')[0].split('>=')[0].strip()
+                        if package:
+                            libraries_data.append({
+                                'name': package,
+                                'category': 'Python',
+                                'source': 'requirements.txt'
+                            })
+            except Exception as e:
+                self.logger.debug(f"No requirements.txt found or error: {str(e)}")
+            
+            # Buscar package.json (JavaScript/Node.js)
+            try:
+                package_json = repo.get_contents("package.json")
+                import json
+                content = json.loads(package_json.decoded_content.decode('utf-8'))
+                
+                # Procesar dependencias
+                dependencies = content.get('dependencies', {})
+                for package, version in dependencies.items():
+                    libraries_data.append({
+                        'name': package,
+                        'category': 'JavaScript',
+                        'source': 'package.json'
+                    })
+                    
+                # Procesar devDependencies
+                dev_dependencies = content.get('devDependencies', {})
+                for package, version in dev_dependencies.items():
+                    libraries_data.append({
+                        'name': package,
+                        'category': 'JavaScript',
+                        'source': 'package.json (dev)'
+                    })
+                    
+            except Exception as e:
+                self.logger.debug(f"No package.json found or error: {str(e)}")
+                
+            # Buscar pom.xml (Maven/Java)
+            try:
+                pom_xml = repo.get_contents("pom.xml")
+                from xml.etree import ElementTree
+                
+                content = pom_xml.decoded_content.decode('utf-8')
+                root = ElementTree.fromstring(content)
+                
+                # Buscar dependencias en pom.xml
+                namespaces = {'maven': 'http://maven.apache.org/POM/4.0.0'}
+                dependencies = root.findall('.//maven:dependencies/maven:dependency', namespaces)
+                
+                for dep in dependencies:
+                    group_id = dep.find('maven:groupId', namespaces)
+                    artifact_id = dep.find('maven:artifactId', namespaces)
+                    
+                    if group_id is not None and artifact_id is not None:
+                        libraries_data.append({
+                            'name': f"{group_id.text}:{artifact_id.text}",
+                            'category': 'Java',
+                            'source': 'pom.xml'
+                        })
+                        
+            except Exception as e:
+                self.logger.debug(f"No pom.xml found or error: {str(e)}")
+            
+            return libraries_data
+            
+        except Exception as e:
+            self.logger.error(f"Error detecting libraries: {str(e)}")
             return []
