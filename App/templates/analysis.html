@@ -152,55 +152,28 @@
                 {% if analysis_available %}
                     {% if tier_analysis %}
                         <div class="analysis-content">
-                            <!-- Evaluation Overview -->
+                            <!-- Structured Analysis -->
                             <h3>Evaluación General</h3>
-                            <p>{{ tier_analysis.evaluacion_general }}</p>
-
-                            {% comment %}
-                            <!-- Level Analysis -->
-                            {% for nivel, datos in tier_analysis.analisis_por_nivel.items %}
-                            <div class="nivel-section mb-4">
-                                <h4><h4>{{ nivel|title }}</h4>
-                                <p>Completitud: {{ datos.porcentaje_completitud }}%</p>
-                                
-                                {% if datos.requisitos_cumplidos %}
-                                <h5>Requisitos Cumplidos:</h5>
-                                <ul>
-                                    {% for req in datos.requisitos_cumplidos %}
-                                    <li>{{ req }}</li>
-                                    {% endfor %}
-                                </ul>
-                                {% endif %}
-
-                                {% if datos.requisitos_faltantes %}
-                                <h5>Requisitos Faltantes:</h5>
-                                <ul>
-                                    {% for req in datos.requisitos_faltantes %}
-                                    <li>{{ req }}</li>
-                                    {% endfor %}
-                                </ul>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
-
-                            <!-- Technical Analysis -->
-                            <h3>Análisis Técnico</h3>
-                            {% for key, value in tier_analysis.analisis_tecnico.items %}
-                            <p><strong>{{ key|title }}:</strong> {{ value }}</p>
-                            {% endfor %}
-
-                            <!-- Recommendations -->
-                            <h3>Recomendaciones</h3>
-                            <ul>
-                                {% for rec in tier_analysis.recomendaciones %}
-                                <li>{{ rec }}</li>
+                            
+                            {% if tier_analysis.evaluacion_general_html %}
+                                <div class="markdown-content">{{ tier_analysis.evaluacion_general_html|safe }}</div>
+                            {% elif structured_analysis %}
+                                {% for section in structured_analysis %}
+                                    <div class="analysis-section mb-4">
+                                        <h4 class="section-title">{{ section.title }}</h4>
+                                        
+                                        {% for item in section.content %}
+                                            {% if item.type == 'subheader' %}
+                                                <h5 class="mt-3">{{ item.text }}</h5>
+                                            {% elif item.type == 'paragraph' %}
+                                                <p>{{ item.text }}</p>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
                                 {% endfor %}
-                            </ul>
-
-                            <!-- Maturity Score -->
-                            <h3>Puntuación de Madurez</h3>
-                            <p>{{ tier_analysis.puntuacion_madurez }}/100</p>
-                            {% endcomment %}
+                            {% else %}
+                                <pre class="analysis-content">{{ tier_analysis.evaluacion_general }}</pre>
+                            {% endif %}
                         </div>
                     {% else %}
                         <p class="text-muted">El informe no está disponible actualmente.</p>

@@ -14,6 +14,7 @@ import requests.exceptions
 from dotenv import load_dotenv
 from github_getter import GitHubAnalyzer
 from briefing_analyzer import ComplianceAnalyzer
+from RAG_process import RepoRAGProcessor
 
 class LLMClient:
     def __init__(
@@ -21,7 +22,7 @@ class LLMClient:
         groq_api_key: Optional[str] = None,
         groq_model: str = "mixtral-8x7b-32768",
         ollama_model: str = "mistral:latest",
-        logger: Optional[logging.Logger] = None
+        logger: Optional[logging.Logger] = None,
     ):
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
         self.groq_model = groq_model
@@ -96,7 +97,8 @@ class GitHubRAGAnalyzer:
         self,
         model_name: str = "mixtral-8x7b-32768",
         api_key: str = None,
-        ollama_model: str = 'mistral:latest'
+        ollama_model: str = 'mistral:latest',
+        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     ):
         load_dotenv()
         
@@ -116,50 +118,125 @@ class GitHubRAGAnalyzer:
         )
         self.github_analyzer = GitHubAnalyzer()
         self.compliance_analyzer = ComplianceAnalyzer()
+        self.rag_processor = RepoRAGProcessor(embedding_model_name=embedding_model)
 
     def analyze_requirements_completion(self, repo_url: str, briefing_path: str) -> Dict[str, Any]:
         try:
             # Get repository content
+            self.logger.info(f"Starting analysis for repository: {repo_url}")
             repo_path = self.github_analyzer.clone_repo(repo_url)
             if not repo_path:
                 raise ValueError("Failed to clone repository")
-
-            repo_docs = self.github_analyzer.extract_text_from_repo(repo_path)
-            if not repo_docs:
-                raise ValueError("No content found in repository")
+            self.logger.info(f"Repository cloned to: {repo_path}")
+            
+            # Process repository to RAG
+            self.logger.info("Starting repository processing...")
+            repo_success = self.rag_processor.process_repository(repo_path)
+            if not repo_success:
+                self.logger.error("Repository processing failed")
+                raise ValueError("Failed to process repository content")
+            self.logger.info("Repository processing completed successfully")
+            
+            # Process briefing into RAG
+            self.logger.info(f"Processing briefing document: {briefing_path}")
+            if not os.path.exists(briefing_path):
+                self.logger.error(f"Briefing file not found: {briefing_path}")
+                raise ValueError(f"Briefing file not found: {briefing_path}")
+                
+            briefing_success = self.rag_processor.process_briefing(briefing_path)
+            if not briefing_success:
+                self.logger.error("Briefing processing failed")
+                raise ValueError("Failed to process briefing document")
+            self.logger.info("Briefing processing completed successfully")
             
             # Get repository statistics
             repo_stats = self.github_analyzer.get_repo_stats(repo_url)
-            
+            detected_technologies = self.rag_processor.technologies if hasattr(self.rag_processor, 'technologies') else {}
+
             # Get briefing content
-            briefing_text = self.compliance_analyzer.extract_text_from_pdf(briefing_path)
-            if not briefing_text:
-                raise ValueError("Failed to extract briefing text")
+            analysis_queries = [
+                "¿Qué requisitos técnicos establece el briefing?",
+                "¿Qué componentes y funcionalidades tiene este repositorio?",
+                "¿Cómo se estructura y organiza el código en este repositorio?",
+                "¿Qué arquitectura y tecnologías se utilizan en este proyecto?",
+                "¿Qué frameworks, librerías y herramientas están configuradas en el proyecto?",
+                "¿Qué archivos de configuración de dependencias existen en el repositorio?"
+            ]
 
-            # Prepare content with length limit
-            max_length = 4000 if not self.llm_client.using_ollama else 25000
-            repo_content = "\n".join(repo_docs)[:max_length]
+            context_parts = []
+            for query in analysis_queries:
+                retrieved_context = self.rag_processor.get_formatted_context(query, k=5)
+                context_parts.append(f"Consulta: {query}\n{retrieved_context}")
             
-            # Generate analysis prompt
+            rag_context = "\n\n".join(context_parts)
+            
             prompt = f"""
-            Eres un analista técnico especializado en proyectos de IA/ML.
+            You are an AI/ML Technical Analyst with expertise in code quality assessment, AI-generated code detection, and technical debt evaluation. Your task is to critically analyze a GitHub repository from bootcamp students, considering multi-level objectives from the briefing (up to 4 levels: essential/medium/advanced/expert) and highlighting key elements for teacher review.
 
-            BRIEFING (Requisitos del proyecto):
-            {briefing_text}
+            **Input Data:**
+            1. RAG CONTEXT (Briefing with possible multi-level objectives):
+            {rag_context}
 
-            CONTENIDO DEL REPOSITORIO:
-            {repo_content}
+            2. DETECTED TECHNOLOGIES (JSON):
+            {json.dumps(detected_technologies, indent=2, ensure_ascii=False)}
 
-            ESTADÍSTICAS DEL REPOSITORIO:
+            3. REPOSITORY STATISTICS (JSON):
             {json.dumps(repo_stats, indent=2, ensure_ascii=False)}
 
-            Por favor, analiza el repositorio y responde las siguientes preguntas:
-            1. ¿Cumple el repositorio con los requisitos del briefing? ¿Por qué?
-            2. ¿Qué requisitos o funcionalidades faltan por implementar?
-            3. ¿Qué mejoras específicas recomiendas para el proyecto?
+            **Analysis Instructions:**
+            1. Multi-Level Objective Mapping:
+            - Identify which briefing levels (essential/medium/advanced/expert) are present
+            - Evaluate differentiated compliance by level with concrete evidence
+            - Highlight attempts to reach higher objectives not required (critical positive)
 
-            Genera una respuesta en español, clara y concisa, en formato de párrafo.
-            Enfócate en los aspectos positivos, negativos y recomendaciones de mejora.
+            2. Deep Technical Analysis:
+            - Compare actual architecture vs. expected by complexity level
+            - Evaluate suspicious code patterns (over-engineering or risky simplifications)
+            - Analyze key metrics: coupling, cohesion, cyclomatic complexity
+
+            3. AI Detection with Educational Context:
+            - Look for atypical patterns for students (advanced syntax without conceptual foundation)
+            - Analyze correlation between commit complexity and technical leaps
+            - Calculate probability of AI-generated code with pedagogical indicators
+
+            4. Learning-Oriented Recommendations:
+            - Prioritize improvements that close gaps between achieved vs. expected levels
+            - Point out "technical patches" that demonstrate conceptual misunderstandings
+            - Suggest refactors that strengthen MLOps fundamentals
+
+            **Output Requirements (in Spanish):**
+            Generate the response translated to Spanish, using markdown with this structure as reference on how to output the analysis:
+
+            1. **Multi-Level Technical Analysis**  
+            - Implemented Architecture vs. Expected by Level
+            - Key Technologies and Objective Compliance
+            - Critical Points of Educational Technical Debt
+
+            2. **Levels of Objectives Achieved**  
+            - ✅❌ Essential: Analysis with specific evidence
+            - ➕/− Medium: Detected partial implementations
+            - ⚠️ Advanced/Expert: Meritorious attempts or conceptual errors
+
+            3. **AI Use and Pedagogical Warning Signs**  
+            - Estimated Probability (%) and Key Patterns
+            - Suspicious Sections (e.g., Complex model without basic data pipeline)
+            - Inconsistencies between Code Complexity and Versioning Practices
+
+            4. **Prioritized Improvements for Technical Maturity**  
+            - Actions to Consolidate Current Level
+            - Preparation for Higher Objectives
+            - Conceptual Errors to Review Urgently
+
+            5. **Elements for Teacher Review**  
+            - Code with High Risk of "Smart Copying"
+            - Implementations that Mask Misunderstanding
+            - Anomalous Metrics (e.g., High test coverage with untestable logic)
+
+            **Critical Approach:**  
+            - Directly relate technical findings to learning stages  
+            - Highlight discrepancies between technical ambition and fundamentals  
+            - Point out both exceptional progress and dangerous shortcuts  
+            - Use concrete examples from the code for each observation  
             """
 
             # Get analysis from LLM
@@ -173,6 +250,90 @@ class GitHubRAGAnalyzer:
                 
                 # Clean and encode the response
                 cleaned_analysis = analysis.encode('utf-8', errors='ignore').decode('utf-8').strip()
+
+                required_sections = [
+                {
+                    "number": "1", 
+                    "keywords": [
+                        # Spanish keywords
+                        "análisis", "técnico", "multinivel", "analisis",
+                        # English keywords  
+                        "analysis", "technical", "multilevel", "multi-level"
+                    ]
+                },
+                {
+                    "number": "2", 
+                    "keywords": [
+                        # Spanish keywords
+                        "niveles", "objetivos", "alcanzados", "logrados",
+                        # English keywords
+                        "levels", "objectives", "achieved", "goals", "reached"
+                    ]
+                },
+                {
+                    "number": "3", 
+                    "keywords": [
+                        # Spanish keywords
+                        "uso", "ia", "señales", "alerta", "pedagógica", "pedagogica", "ai", 
+                        # English keywords
+                        "use", "ai", "signs", "warning", "pedagogical", "educational"
+                    ]
+                },
+                {
+                    "number": "4", 
+                    "keywords": [
+                        # Spanish keywords
+                        "mejoras", "priorizadas", "madurez", "técnica", "tecnica", 
+                        # English keywords
+                        "improvements", "prioritized", "maturity", "technical"
+                    ]
+                },
+                {
+                    "number": "5", 
+                    "keywords": [
+                        # Spanish keywords
+                        "elementos", "revisión", "revision", "docente", 
+                        # English keywords
+                        "elements", "review", "teacher", "instructor"
+                    ]
+                }
+            ]
+
+                missing_sections = []
+                for section in required_sections:
+                    # Try multiple formats: "1. Title", "## 1. Title", "1, Title", etc.
+                    section_patterns = [
+                    rf"{section['number']}\.?\s+.*{keyword}" for keyword in section['keywords']
+                ] + [
+                    rf"#+\s*{section['number']}\.?\s+.*{keyword}" for keyword in section['keywords']
+                ]
+                                    
+                    # Check if any pattern matches
+                    found = False
+                    for pattern in section_patterns:
+                        import re
+                        if re.search(pattern.lower(), cleaned_analysis.lower()):
+                            found = True
+                            break
+                    
+                    if not found:
+                        # Store the missing section for later addition
+                        missing_sections.append(section)
+                        self.logger.warning(f"Missing section {section['number']} in analysis")
+                
+                # Add missing sections if needed
+                standard_section_titles = [
+                    "1. Análisis Técnico Multinivel",
+                    "2. Niveles de Objetivos Alcanzados",
+                    "3. Uso de IA y Señales de Alerta Pedagógica",
+                    "4. Mejoras Priorizadas para Madurez Técnica",
+                    "5. Elementos para Revisión Docente"
+                ]
+                
+                for missing in missing_sections:
+                    section_index = int(missing['number']) - 1
+                    cleaned_analysis += f"\n\n## {standard_section_titles[section_index]}\nContenido no generado por el modelo"
+
                 
                 if not cleaned_analysis:
                     raise ValueError("Empty response after cleaning")
