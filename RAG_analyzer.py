@@ -210,7 +210,7 @@ class GitHubRAGAnalyzer:
             - Suggest refactors that strengthen MLOps fundamentals
 
             **Output Requirements (in Spanish):**
-            Generate the response translated to Spanish, using markdown with this structure as reference on how to output the analysis:
+            Generate the response MUST translated to Spanish, using markdown with this structure as reference on how to output the analysis. You MUST populate the sections with the information you have generated before this point. The structure is just a guide, don't return it as is, you MUST populate it.:
 
             1. **Multi-Level Technical Analysis**  
             - Implemented Architecture vs. Expected by Level

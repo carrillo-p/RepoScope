@@ -334,6 +334,12 @@ class RepoRAGProcessor:
             else:
                 self.vector_store = FAISS.from_documents(briefing_chunks, self.embeddings)
                 
+            try:
+                os.remove(briefing_path)
+                self.logger.info(f"Deleted briefing file: {briefing_path}")
+            except OSError as e:
+                self.logger.warning(f"Failed to delete briefing file: {e}")
+            
             return True
             
         except Exception as e:
