@@ -412,6 +412,7 @@ class GitHubAnalyzer:
                                 'category': 'Python',
                                 'source': 'requirements.txt'
                             })
+                self.logger.info(f"Found {len(libraries_data)} Python libraries in requirements.txt")
             except Exception as e:
                 self.logger.debug(f"No requirements.txt found or error: {str(e)}")
             
@@ -422,25 +423,28 @@ class GitHubAnalyzer:
                 content = json.loads(package_json.decoded_content.decode('utf-8'))
                 
                 # Procesar dependencias
-                dependencies = content.get('dependencies', {})
-                for package, version in dependencies.items():
-                    libraries_data.append({
-                        'name': package,
-                        'category': 'JavaScript',
-                        'source': 'package.json'
-                    })
-                    
-                # Procesar devDependencies
-                dev_dependencies = content.get('devDependencies', {})
-                for package, version in dev_dependencies.items():
-                    libraries_data.append({
-                        'name': package,
-                        'category': 'JavaScript',
-                        'source': 'package.json (dev)'
-                    })
-                    
+                if 'dependencies' in content:
+                    for package, _ in content['dependencies'].items():
+                        libraries_data.append({
+                            'name': package,
+                            'category': 'JavaScript',
+                            'source': 'package.json'
+                        })
+            
+                # Process dev dependencies
+                if 'devDependencies' in content:
+                    for package, _ in content['devDependencies'].items():
+                        libraries_data.append({
+                            'name': package,
+                            'category': 'JavaScript',
+                            'source': 'package.json (dev)'
+                        })
+            
+                self.logger.info(f"Found {len(libraries_data)} JavaScript libraries in package.json")        
+            except json.JSONDecodeError:
+                self.logger.debug("Error parsing package.json: Invalid JSON")
             except Exception as e:
-                self.logger.debug(f"No package.json found or error: {str(e)}")
+                self.logger.debug(f"No package.json found or error parsing it: {e}")
                 
             # Buscar pom.xml (Maven/Java)
             try:
@@ -451,12 +455,12 @@ class GitHubAnalyzer:
                 root = ElementTree.fromstring(content)
                 
                 # Buscar dependencias en pom.xml
-                namespaces = {'maven': 'http://maven.apache.org/POM/4.0.0'}
-                dependencies = root.findall('.//maven:dependencies/maven:dependency', namespaces)
+                ns = {'': 'http://maven.apache.org/POM/4.0.0'}
+                dependencies = root.findall('.//dependencies/dependency', ns)
                 
                 for dep in dependencies:
-                    group_id = dep.find('maven:groupId', namespaces)
-                    artifact_id = dep.find('maven:artifactId', namespaces)
+                    group_id = dep.find('./groupId', ns)
+                    artifact_id = dep.find('./artifactId', ns)
                     
                     if group_id is not None and artifact_id is not None:
                         libraries_data.append({
@@ -464,7 +468,8 @@ class GitHubAnalyzer:
                             'category': 'Java',
                             'source': 'pom.xml'
                         })
-                        
+                    
+                self.logger.info(f"Found {len(libraries_data)} libraries in pom.xml")
             except Exception as e:
                 self.logger.debug(f"No pom.xml found or error: {str(e)}")
             
