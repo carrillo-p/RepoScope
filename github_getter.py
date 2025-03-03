@@ -3,6 +3,7 @@ import os
 import logging
 from dotenv import load_dotenv
 import pandas as pd
+import json
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -419,7 +420,6 @@ class GitHubAnalyzer:
             # Buscar package.json (JavaScript/Node.js)
             try:
                 package_json = repo.get_contents("package.json")
-                import json
                 content = json.loads(package_json.decoded_content.decode('utf-8'))
                 
                 # Procesar dependencias
